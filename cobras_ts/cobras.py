@@ -9,7 +9,7 @@ from cobras_ts.cluster import Cluster
 from cobras_ts.clustering import Clustering
 
 
-class COBRAS(abc.ABC):
+class  COBRAS(abc.ABC):
     def __init__(self, data, querier, max_questions, train_indices=None, store_intermediate_results=True):
         """
         COBRAS clustering
