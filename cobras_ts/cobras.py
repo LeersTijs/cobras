@@ -166,7 +166,7 @@ class  COBRAS(abc.ABC):
         return
 
     @abc.abstractmethod
-    def create_superinstance(self, indices, parent=None, cl=None):
+    def create_superinstance(self, indices, parent=None):
         """ Creates a new super-instance containing the given instances and with the given parent
 
         :param indices: the indices of the instances that should be in the new super-instance

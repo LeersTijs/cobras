@@ -30,7 +30,6 @@ class SuperInstance:
         self.children = None
         self.parent = parent
 
-
     def get_representative_idx(self):
         """
         :return: the index of the super-instance representative
@@ -65,3 +64,6 @@ class SuperInstance:
             return self
         else:
             return self.parent.get_root()
+
+    def calculate_clv(self, cl):
+        return None

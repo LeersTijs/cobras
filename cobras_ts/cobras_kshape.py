@@ -46,7 +46,7 @@ class COBRAS_kShape(COBRAS):
 
         return training
 
-    def create_superinstance(self, indices, parent=None, cl=None):
+    def create_superinstance(self, indices, parent=None):
         """
             Creates a super-instance of type SuperInstance_kShape
         """
