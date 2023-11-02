@@ -13,6 +13,7 @@ class SuperInstance_km_clv(SuperInstance):
         self.centroid = np.mean(data[indices, :], axis=0)
         self.si_train_indices = [x for x in indices if x in train_indices]
         self.i = i
+        self.set_indices = set(indices)
 
         try:
             self.representative_idx = min(self.si_train_indices,
@@ -32,6 +33,6 @@ class SuperInstance_km_clv(SuperInstance):
         """
         clv = 0
         for (x, y) in cl:
-            if x in self.indices and y in self.indices:
+            if x in self.set_indices and y in self.set_indices:
                 clv += 1
         return clv
