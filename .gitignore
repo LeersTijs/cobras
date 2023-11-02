@@ -6,3 +6,5 @@ examples/.ipynb_checkpoints/
 cobras_ts.egg-info/
 build/*
 dist/*
+
+test_file.py
