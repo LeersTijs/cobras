@@ -4,6 +4,7 @@ from cobras_ts.cobras import COBRAS
 
 from sklearn.cluster import KMeans
 
+
 class COBRAS_kmeans(COBRAS):
 
     def split_superinstance(self, si, k):
@@ -28,17 +29,17 @@ class COBRAS_kmeans(COBRAS):
             if len(si_train_indices) != 0:
                 training.append(SuperInstance_kmeans(self.data, cur_indices, self.train_indices, si))
             else:
-                no_training.append((cur_indices, np.mean(self.data[cur_indices,:],axis=0)))
+                no_training.append((cur_indices, np.mean(self.data[cur_indices, :], axis=0)))
 
         for indices, centroid in no_training:
-            closest_train = min(training, key=lambda x: np.linalg.norm(self.data[x.representative_idx,:] - centroid))
+            closest_train = min(training, key=lambda x: np.linalg.norm(self.data[x.representative_idx, :] - centroid))
             closest_train.indices.extend(indices)
 
         si.children = training
 
         return training
 
-    def create_superinstance(self, indices, parent=None):
+    def create_superinstance(self, indices, parent=None, cl=None):
         """
             Creates a super-instance of type SuperInstance_kmeans
         """

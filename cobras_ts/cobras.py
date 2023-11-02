@@ -166,7 +166,7 @@ class  COBRAS(abc.ABC):
         return
 
     @abc.abstractmethod
-    def create_superinstance(self, indices, parent=None):
+    def create_superinstance(self, indices, parent=None, cl=None):
         """ Creates a new super-instance containing the given instances and with the given parent
 
         :param indices: the indices of the instances that should be in the new super-instance
@@ -202,6 +202,10 @@ class  COBRAS(abc.ABC):
             else:
                 # otherwise use k-means to split it
                 new_si = self.split_superinstance(si, 2)
+                #TIJS: prob add cl and ml to it as parm
+                #   If this is the only place split_superinstance is called its fine.
+                #   Otherwise maby make 2 function: one for determening splitting level,
+                #                                   other for the real splitting
 
             if len(new_si) == 1:
                 # we cannot split any further along this branch, we reached the splitting level
