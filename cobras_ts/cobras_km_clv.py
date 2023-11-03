@@ -211,9 +211,9 @@ class COBRAS_km_clv(COBRAS):
                 if len(superinstance.train_indices) < 2:
                     continue
 
-                clv = superinstance.calculate_clv(self.cl)
-                if clv != 0:
-                    print("clv: {}, id: {}".format(clv, superinstance.i))
+                # clv = superinstance.calculate_clv(self.cl)
+                # if clv != 0:
+                #     print("clv: {}, id: {}".format(clv, superinstance.i))
                 if len(superinstance.indices) > max_heur:
                     superinstance_to_split = superinstance
                     max_heur = len(superinstance.indices)
