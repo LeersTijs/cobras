@@ -9,14 +9,12 @@ from get_data_set import get_data_set
 simplefilter(action='ignore', category=FutureWarning)
 
 
-def test_clv(dataset: str, start_budget=5, end_budget=100, jumps=5, n=10):
-    results = {
+def test_clv(data, labels, start_budget=5, end_budget=100, jumps=5, n=10):
+    dict_data = {
         "budgets": [],
         "clv": [],
         "ari": [],
     }
-
-    data, labels = get_data_set(dataset)
 
     for budget in range(start_budget, end_budget + jumps, jumps):
         print("----- budget: {} -----".format(budget))
@@ -36,23 +34,26 @@ def test_clv(dataset: str, start_budget=5, end_budget=100, jumps=5, n=10):
 
         avg_ari = sum_ari / n
         avg_clv = sum_clv / n
-        results["budgets"].append(budget)
-        results["clv"].append(avg_clv)
-        results["ari"].append(avg_ari)
+        dict_data["budgets"].append(budget)
+        dict_data["clv"].append(avg_clv)
+        dict_data["ari"].append(avg_ari)
         print("sum ari: {}, avg: {}".format(sum_ari, avg_ari))
         print("sum clv: {}, avg: {}".format(sum_clv, avg_clv))
 
-    return results
+    return dict_data
 
 
-if __name__ == "__main__":
+def main():
     names = ["iris", "wine", "ionosphere", "glass", "yeast"]
     results = dict()
     for name in names:
         print("############### {} ###############".format(name))
-        result = test_clv(dataset=name,
+        data, labels = get_data_set(name)
+        budget = min(len(data), 150)
+        result = test_clv(data=data,
+                          labels=labels,
                           start_budget=5,
-                          end_budget=100,
+                          end_budget=budget,
                           jumps=5,
                           n=10)
         # print(result)
@@ -60,3 +61,7 @@ if __name__ == "__main__":
 
     with open('result.json', 'w') as f:
         json.dump(results, f)
+
+
+if __name__ == "__main__":
+    main()
