@@ -192,6 +192,7 @@ class COBRAS_km_clv(COBRAS):
 
         superinstance_to_split = None
         max_heur = -np.inf
+        max_clv = 0
         originating_cluster = None
 
         for cluster in self.clustering.clusters:
@@ -211,9 +212,15 @@ class COBRAS_km_clv(COBRAS):
                 if len(superinstance.train_indices) < 2:
                     continue
 
-                # clv = superinstance.calculate_clv(self.cl)
-                # if clv != 0:
-                #     print("clv: {}, id: {}".format(clv, superinstance.i))
+                clv = superinstance.calculate_clv(self.cl)
+                if clv > max_clv:
+                    superinstance_to_split = superinstance
+                    max_clv = clv
+                    originating_cluster = cluster
+                    continue
+                if max_clv != 0:
+                    continue
+
                 if len(superinstance.indices) > max_heur:
                     superinstance_to_split = superinstance
                     max_heur = len(superinstance.indices)

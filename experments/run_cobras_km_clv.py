@@ -59,7 +59,7 @@ def main():
         # print(result)
         results[name] = result
 
-    with open('result.json', 'w') as f:
+    with open('result_selected_si_with_clv.json', 'w') as f:
         json.dump(results, f)
 
 
