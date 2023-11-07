@@ -44,12 +44,13 @@ def test_clv(data, labels, start_budget=5, end_budget=100, jumps=5, n=10):
 
 
 def main():
-    names = ["iris", "wine", "ionosphere", "glass", "yeast"]
+    # names = ["iris", "wine", "ionosphere", "glass", "yeast"]
+    names = ["wine"]
     results = dict()
     for name in names:
         print("############### {} ###############".format(name))
         data, labels = get_data_set(name)
-        budget = min(len(data), 150)
+        budget = 150
         result = test_clv(data=data,
                           labels=labels,
                           start_budget=5,
@@ -59,7 +60,7 @@ def main():
         # print(result)
         results[name] = result
 
-    with open('result_selected_si_with_clv.json', 'w') as f:
+    with open('test.json', 'w') as f:
         json.dump(results, f)
 
 

@@ -240,13 +240,15 @@ class  COBRAS(abc.ABC):
 
             if len(si_to_choose) == 0:
                 split_level = max([split_level, 1])
-                split_n = 2 ** int(split_level)
+                split_n = 2 * int(split_level)
+                # split_n = 2 ** int(split_level)
                 return min(max_split, split_n)
 
             si = min(si_to_choose, key=lambda x: len(x.indices))
 
         split_level = max([split_level, 1])
-        split_n = 2 ** int(split_level)
+        # split_n = 2 ** int(split_level)
+        split_n = 2 * int(split_level)
         return min(max_split, split_n)
 
     def add_new_clusters_from_split(self, sis):

@@ -186,14 +186,18 @@ class COBRAS_km_clv(COBRAS):
             :return: the selected super-instance for splitting and the cluster from which it originates
             :rtype: Tuple[SuperInstance, Cluster]
         """
-
         if len(self.clustering.clusters) == 1 and len(self.clustering.clusters[0].super_instances) == 1:
             return self.clustering.clusters[0].super_instances[0], self.clustering.clusters[0]
 
         superinstance_to_split = None
         max_heur = -np.inf
-        max_clv = 0
+        # max_clv = 0
         originating_cluster = None
+        # for cluter in self.clustering.clusters:
+        #     for si in cluter.super_instances:
+        #         clv = si.calculate_clv(self.cl)
+        #         if clv != 0:
+        #             print("hier")
 
         for cluster in self.clustering.clusters:
             if cluster.is_pure:
@@ -212,14 +216,14 @@ class COBRAS_km_clv(COBRAS):
                 if len(superinstance.train_indices) < 2:
                     continue
 
-                clv = superinstance.calculate_clv(self.cl)
-                if clv > max_clv:
-                    superinstance_to_split = superinstance
-                    max_clv = clv
-                    originating_cluster = cluster
-                    continue
-                if max_clv != 0:
-                    continue
+                # clv = superinstance.calculate_clv(self.cl)
+                # if clv > max_clv:
+                #     superinstance_to_split = superinstance
+                #     max_clv = clv
+                #     originating_cluster = cluster
+                #     continue
+                # if max_clv != 0:
+                #     continue
 
                 if len(superinstance.indices) > max_heur:
                     superinstance_to_split = superinstance
