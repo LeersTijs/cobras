@@ -57,6 +57,10 @@ def get_data_set(name: str):
         case "yeast":
             path += "Yeast/yeast.data"
             data, labels = map_yeast_to_matrix(np.genfromtxt(path, delimiter=',', dtype=str))
+        case "test":
+            path += "Test/test.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
+            labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[0])
 
     return data, labels
 
@@ -69,7 +73,7 @@ def get_data_summery(name: str, data, labels):
 
 def main():
     # names = ["iris", "yeast"]
-    names = ["iris", "wine", "ionosphere", "glass", "yeast"]
+    names = ["iris", "wine", "ionosphere", "glass", "yeast", "test"]
     for name in names:
         data, labels = get_data_set(name)
         print(get_data_summery(name, data, labels))

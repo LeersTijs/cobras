@@ -67,7 +67,7 @@ class  COBRAS(abc.ABC):
         # the super-instance is split, and a new cluster is created for each of the newly created super-instances
         initial_k = self.determine_split_level(initial_superinstance,
                                                copy.deepcopy(self.clustering.construct_cluster_labeling()))
-
+        print(f"initial_k = {initial_k}")
         # split the super-instance and place each new super-instance in its own cluster
         superinstances = self.split_superinstance(initial_superinstance, initial_k)
         self.clustering.clusters = []
@@ -109,7 +109,7 @@ class  COBRAS(abc.ABC):
             # - splitting phase -
             # determine the splitlevel
             split_level = self.determine_split_level(to_split, clustering_to_store)
-
+            print(f"split_level = {split_level}")
             # split the chosen super-instance
             new_super_instances = self.split_superinstance(to_split, split_level)
 
@@ -221,6 +221,7 @@ class  COBRAS(abc.ABC):
             if self.querier.query_points(pt1, pt2):
                 self.ml.append((pt1, pt2))
                 must_link_found = True
+                print("ml")
                 if self.store_intermediate_results:
                     self.intermediate_results.append(
                         (clustering_to_store, time.time() - self.start_time, len(self.ml) + len(self.cl)))
@@ -228,6 +229,7 @@ class  COBRAS(abc.ABC):
             else:
                 self.cl.append((pt1, pt2))
                 split_level += 1
+                print("cl")
                 if self.store_intermediate_results:
                     self.intermediate_results.append(
                         (clustering_to_store, time.time() - self.start_time, len(self.ml) + len(self.cl)))
@@ -240,15 +242,13 @@ class  COBRAS(abc.ABC):
 
             if len(si_to_choose) == 0:
                 split_level = max([split_level, 1])
-                split_n = 2 * int(split_level)
-                # split_n = 2 ** int(split_level)
+                split_n = 2 ** int(split_level)
                 return min(max_split, split_n)
 
             si = min(si_to_choose, key=lambda x: len(x.indices))
 
         split_level = max([split_level, 1])
-        # split_n = 2 ** int(split_level)
-        split_n = 2 * int(split_level)
+        split_n = 2 ** int(split_level)
         return min(max_split, split_n)
 
     def add_new_clusters_from_split(self, sis):

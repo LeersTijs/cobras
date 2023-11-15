@@ -1,7 +1,7 @@
 import numpy as np
 import time
 import copy
-from cobras_ts.superinstance_km_clv import SuperInstance_km_clv
+from cobras_ts.cobras_experements.superinstance_km_clv import SuperInstance_km_clv
 from cobras_ts.cobras import COBRAS
 
 from sklearn.cluster import KMeans
@@ -234,3 +234,73 @@ class COBRAS_km_clv(COBRAS):
             return None, None
 
         return superinstance_to_split, originating_cluster
+
+    def determine_split_level(self, superinstance, clustering_to_store):
+        """ Determine the splitting level for the given super-instance using a small amount of queries
+
+        For each query that is posed during the execution of this method the given clustering_to_store is stored as an intermediate result.
+        The provided clustering_to_store should be the last valid clustering that is available
+
+        :return: the splitting level k
+        :rtype: int
+        """
+        # need to make a 'deep copy' here, we will split this one a few times just to determine an appropriate splitting
+        # level
+        si = self.create_superinstance(superinstance.indices)
+
+        must_link_found = False
+        # the maximum splitting level is the number of instances in the superinstance
+        max_split = len(si.indices)
+        split_level = 0
+        while not must_link_found and len(self.ml) + len(self.cl) < self.max_questions:
+
+            if len(si.indices) == 2:
+                # if the superinstance that is being splitted just contains 2 elements split it in 2 superinstances with just 1 instance
+                new_si = [self.create_superinstance([si.indices[0]]), self.create_superinstance([si.indices[1]])]
+            else:
+                # otherwise use k-means to split it
+                new_si = self.split_superinstance(si, 2)
+
+            if len(new_si) == 1:
+                # we cannot split any further along this branch, we reached the splitting level
+                split_level = max([split_level, 1])
+                split_n = 2 ** int(split_level)
+                return min(max_split, split_n)
+
+            s1 = new_si[0]
+            s2 = new_si[1]
+            pt1 = min([s1.representative_idx, s2.representative_idx])
+            pt2 = max([s1.representative_idx, s2.representative_idx])
+
+            if self.querier.query_points(pt1, pt2):
+                self.ml.append((pt1, pt2))
+                must_link_found = True
+                if self.store_intermediate_results:
+                    self.intermediate_results.append(
+                        (clustering_to_store, time.time() - self.start_time, len(self.ml) + len(self.cl)))
+                continue
+            else:
+                self.cl.append((pt1, pt2))
+                split_level += 1
+                if self.store_intermediate_results:
+                    self.intermediate_results.append(
+                        (clustering_to_store, time.time() - self.start_time, len(self.ml) + len(self.cl)))
+
+            si_to_choose = []
+            if len(s1.train_indices) >= 2:
+                si_to_choose.append(s1)
+            if len(s2.train_indices) >= 2:
+                si_to_choose.append(s2)
+
+            if len(si_to_choose) == 0:
+                split_level = max([split_level, 1])
+                # split_n = 2 * int(split_level)
+                split_n = 2 ** int(split_level)
+                return min(max_split, split_n)
+
+            si = min(si_to_choose, key=lambda x: len(x.indices))
+
+        split_level = max([split_level, 1])
+        split_n = 2 ** int(split_level)
+        # split_n = 2 * int(split_level)
+        return min(max_split, split_n)

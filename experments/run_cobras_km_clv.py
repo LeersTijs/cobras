@@ -2,7 +2,7 @@ from sklearn import metrics
 from warnings import simplefilter
 import json
 
-from cobras_ts.cobras_km_clv import COBRAS_km_clv
+from cobras_ts.cobras_experements.cobras_km_clv import COBRAS_km_clv
 from cobras_ts.querier.labelquerier import LabelQuerier
 from get_data_set import get_data_set
 
@@ -44,8 +44,8 @@ def test_clv(data, labels, start_budget=5, end_budget=100, jumps=5, n=10):
 
 
 def main():
-    # names = ["iris", "wine", "ionosphere", "glass", "yeast"]
-    names = ["wine"]
+    names = ["iris", "wine", "ionosphere", "glass", "yeast"]
+    # names = ["wine"]
     results = dict()
     for name in names:
         print("############### {} ###############".format(name))
@@ -59,9 +59,9 @@ def main():
                           n=10)
         # print(result)
         results[name] = result
-
-    with open('test.json', 'w') as f:
-        json.dump(results, f)
+    print(results)
+    # with open('wine_result_normal.json', 'w') as f:
+    #     json.dump(results, f)
 
 
 if __name__ == "__main__":
