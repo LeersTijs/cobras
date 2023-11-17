@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn import preprocessing
 
 
 def iris(label):
@@ -24,12 +25,25 @@ def map_yeast_to_matrix(raw):
     labels = []
     for raw_string_el in raw:
         row = raw_string_el.split()
-        data.append(list(map(lambda element: float(element),row[1:-1])))
+        data.append(list(map(lambda element: float(element), row[1:-1])))
         labels.append(row[-1])
     l = list(set(labels))
     labels = list(map(lambda label: l.index(label), labels))
     return np.array(data), labels
 
+
+def saving_norm_wine_data():
+    path = "D:/School/2023-2024/thesis/dataSets/"
+    path += "Wine/wine.data"
+    data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
+    labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[0])
+    data_ax1 = preprocessing.normalize(data, axis=1)
+    data_ax0 = preprocessing.normalize(data, axis=0)
+    con_ax1 = np.column_stack((labels, data_ax1))
+    con_ax0 = np.column_stack((labels, data_ax0))
+    np.savetxt("D:/School/2023-2024/thesis/dataSets/Wine_test/wine_test_ax1.data", con_ax1, delimiter=",")
+    np.savetxt("D:/School/2023-2024/thesis/dataSets/Wine_test/wine_test_ax0.data", con_ax0, delimiter=",")
+    # print(con[0])
 
 def get_data_set(name: str):
     name = name.lower()
@@ -61,6 +75,10 @@ def get_data_set(name: str):
             path += "Test/test.data"
             data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
             labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[0])
+        case "wine_normal":
+            path += "Wine_test/wine_test_ax0.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
+            labels = np.loadtxt(path, delimiter=',', usecols=[0]).astype(np.int32)
 
     return data, labels
 
@@ -73,7 +91,8 @@ def get_data_summery(name: str, data, labels):
 
 def main():
     # names = ["iris", "yeast"]
-    names = ["iris", "wine", "ionosphere", "glass", "yeast", "test"]
+    # names = ["iris", "wine", "ionosphere", "glass", "yeast", "test"]
+    names = ["wine_normal"]
     for name in names:
         data, labels = get_data_set(name)
         print(get_data_summery(name, data, labels))

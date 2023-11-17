@@ -40,18 +40,19 @@ def normal_run(name, start_budget=5, end_budget=100, jumps=5):
 
 def main():
     np.random.seed(31)
-    name = "wine"
+    names = ["wine_normal"]
     # data, labels = get_data_set(name)
-    s, e, j = 105, 105, 5
-    print("####### Normal: #######")
-    # norm_aris = normal_run(name, start_budget=s, end_budget=e, jumps=j)
-    print("####### split lvl: ########")
-    spl_aris = test_split_lvl(name, start_budget=s, end_budget=e, jumps=j)
+    for name in names:
+        s, e, j = 105, 105, 5
+        print("####### Normal: #######")
+        # norm_aris = normal_run(name, start_budget=s, end_budget=e, jumps=j)
+        print("####### split lvl: ########")
+        spl_aris = test_split_lvl(name, start_budget=s, end_budget=e, jumps=j)
 
-    # plt.plot(range(s, e + j, j), norm_aris, marker='x', label="norm")
-    plt.plot(range(s, e + j, j), spl_aris, marker='.', label="split")
-    plt.legend()
-    plt.show()
+        # plt.plot(range(s, e + j, j), norm_aris, marker='x', label="norm")
+        plt.plot(range(s, e + j, j), spl_aris, marker='.', label="split")
+        plt.legend()
+        plt.show()
 
 
 if __name__ == "__main__":
