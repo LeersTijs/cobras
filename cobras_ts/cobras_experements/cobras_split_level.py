@@ -2,6 +2,7 @@ import copy
 
 import numpy as np
 from sklearn.cluster import KMeans
+import metric_learn
 import time
 from pptree import *
 
@@ -14,14 +15,79 @@ from cobras_ts.cobras_experements.splitting_level_node import Splitting_level_no
 
 class COBRAS_split_lvl(COBRAS):
 
-    def __init__(self, data, querier, max_questions, train_indices=None, store_intermediate_results=True):
+    def __init__(self, data, querier, max_questions,
+                 train_indices=None, store_intermediate_results=True,
+                 splitting_algo: dict = None):
         super().__init__(data, querier, max_questions, train_indices, store_intermediate_results)
         self.query_counter = 0
+        self.splitting_algo = {"algo": ""} if splitting_algo is None else splitting_algo
 
     def split_superinstance(self, si, k):
-        data_to_cluster = self.data[si.indices, :]
+        data_to_cluster = self.data[si.indices, :]  # The raw data
         km = KMeans(k)
         km.fit(data_to_cluster)
+
+        split_labels = km.labels_.astype(np.int32)
+
+        training = []
+        no_training = []
+
+        for new_si_idx in set(split_labels):
+            # go from super instance indices to global ones
+            cur_indices = [si.indices[idx] for idx, c in enumerate(split_labels) if c == new_si_idx]
+
+            si_train_indices = [x for x in cur_indices if x in self.train_indices]
+            if len(si_train_indices) != 0:
+                training.append(SuperInstance_split_lvl(self.data, cur_indices, self.train_indices, si))
+            else:
+                no_training.append((cur_indices, np.mean(self.data[cur_indices, :], axis=0)))
+
+        for indices, centroid in no_training:
+            closest_train = min(training, key=lambda x: np.linalg.norm(self.data[x.representative_idx, :] - centroid))
+            closest_train.indices.extend(indices)
+
+        si.children = training
+
+        return training
+
+    def __convert_index_to_local(self, indices):
+        conversion_dict = {}
+        pairs, labels = [], []
+        for (tuples, label) in [(self.cl, "cl"), (self.ml, "ml")]:
+            for (i, j) in tuples:
+                if i in conversion_dict and j in conversion_dict:
+                    pairs.append([conversion_dict[i], conversion_dict[j]])
+                    labels.append(-1 if label == "cl" else 1)
+                else:
+                    try:
+                        conversion_dict[i] = indices.index(i)
+                        conversion_dict[j] = indices.index(j)
+                        pairs.append([conversion_dict[i], conversion_dict[j]])
+                        labels.append(-1 if label == "cl" else 1)
+                    except ValueError:
+                        pass
+
+        return pairs, labels
+
+    def split_superinstance_using_cl_ml(self, si, k):
+        data_to_cluster = self.data[si.indices, :]
+        pairs, labels = self.__convert_index_to_local(si.indices)
+
+        match self.splitting_algo["algo"]:
+            case "MMC":
+                metric_learner = metric_learn.MMC(preprocessor=data_to_cluster,
+                                                  init=self.splitting_algo["init"],
+                                                  diagonal=self.splitting_algo["diagonal"])
+            case "ITML":
+                metric_learner = metric_learn.ITML(preprocessor=data_to_cluster,
+                                                   prior=self.splitting_algo["prior"])
+            case _:
+                raise ValueError('the given type is not MMC or ITML')
+
+        metric_learner.fit(pairs, labels)
+        data_transformed = metric_learner.transform(data_to_cluster)
+        km = KMeans(n_clusters=k)
+        km.fit(data_transformed)
 
         split_labels = km.labels_.astype(np.int32)
 
@@ -60,15 +126,13 @@ class COBRAS_split_lvl(COBRAS):
         For each query that is posed during the execution of this method the given clustering_to_store is stored as an intermediate result.
         The provided clustering_to_store should be the last valid clustering that is available
 
-        :return: the splitting level k
-        :rtype: int
+        :return: the splitting level k, flag for indication if a prediction should be done
+        :rtype: int, bool
         """
         if debug and node is None:
             node = Splitting_level_node(len(superinstance.indices))
 
         if len(self.ml) + len(self.cl) >= self.max_questions:
-            print("max_questions")
-            # return a flag that indicates that we should make prediction
             return 0, False
         if len(superinstance.indices) == 1:
             return 1, False
@@ -99,12 +163,14 @@ class COBRAS_split_lvl(COBRAS):
             if debug:
                 Splitting_level_node(len(left_child.indices), parent=node, link="ml")  # Left node
                 Splitting_level_node(len(right_child.indices), parent=node, link="ml")  # Right node
+
+            if self.query_counter > budget:
+                over_budget = True
+
             if self.store_intermediate_results:
                 self.intermediate_results.append(
                     (clustering_to_store, time.time() - self.start_time, len(self.ml) + len(self.cl)))
             split_level = 1  # if depth != 0 else 2
-            if self.query_counter > budget:
-                over_budget = True
         else:
             self.cl.append((pt1, pt2))
             if debug:
@@ -112,22 +178,25 @@ class COBRAS_split_lvl(COBRAS):
                 right_node = Splitting_level_node(len(right_child.indices), parent=node, link="cl")  # Right node
             else:
                 left_node, right_node = None, None
+
             if self.query_counter > budget:
                 over_budget = True
 
             if self.store_intermediate_results:
                 self.intermediate_results.append(
                     (clustering_to_store, time.time() - self.start_time, len(self.ml) + len(self.cl)))
+
             if not over_budget:
                 max_split = len(si.indices)
                 left_split, over_budget = self.determine_split_level(left_child, clustering_to_store, depth=depth + 1,
                                                                      debug=debug, node=left_node, budget=budget)
-                if over_budget:
+                if debug and over_budget:
                     right_split = left_split
                     right_node.return_value = left_split
                 else:
                     right_split, over_budget = self.determine_split_level(right_child, clustering_to_store,
-                                                                          depth=depth + 1, debug=debug, node=right_node, budget=budget)
+                                                                          depth=depth + 1, debug=debug, node=right_node,
+                                                                          budget=budget)
                 min_split = min(max_split, left_split + right_split)
                 # Make use of the return flag, to predict the right_child
                 split_level = max(2, min_split)
@@ -138,10 +207,10 @@ class COBRAS_split_lvl(COBRAS):
             node.return_value = split_level
             if depth == 0:
                 print_tree(node)
-        print(f"over_budget: {over_budget}, counter: {self.query_counter}, max: {budget}")
+        # print(f"over_budget: {over_budget}, counter: {self.query_counter}, max: {budget}")
         return split_level, over_budget
 
-    def cluster(self):
+    def cluster(self, split_lvl_budget=np.inf):
         """Perform clustering
 
         :return: if cobras.store_intermediate_results is set to False, this method returns a single Clustering object
@@ -169,10 +238,12 @@ class COBRAS_split_lvl(COBRAS):
         self.query_counter = 0
         initial_k, _ = self.determine_split_level(initial_superinstance,
                                                   copy.deepcopy(self.clustering.construct_cluster_labeling()),
-                                                  debug=True, budget=10)
-        print(f"initial_k = {initial_k}")
+                                                  debug=False, budget=split_lvl_budget)
         # split the super-instance and place each new super-instance in its own cluster
-        superinstances = self.split_superinstance(initial_superinstance, initial_k)
+        if self.splitting_algo["algo"] == "":
+            superinstances = self.split_superinstance(initial_superinstance, initial_k)
+        else:
+            superinstances = self.split_superinstance_using_cl_ml(initial_superinstance, initial_k)
         self.clustering.clusters = []
         for si in superinstances:
             self.clustering.clusters.append(Cluster([si]))
@@ -212,8 +283,9 @@ class COBRAS_split_lvl(COBRAS):
             # - splitting phase -
             # determine the splitlevel
             self.query_counter = 0
-            split_level, _ = self.determine_split_level(to_split, clustering_to_store, debug=True)
-            print(f"split_level = {split_level}")
+            split_level, _ = self.determine_split_level(to_split, clustering_to_store, debug=False,
+                                                        budget=split_lvl_budget)
+            # print(f"split_level = {split_level}")
             # split the chosen super-instance
             new_super_instances = self.split_superinstance(to_split, split_level)
 

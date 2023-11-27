@@ -2,52 +2,101 @@ import json
 import matplotlib.pyplot as plt
 
 
-def main():
-    path = "wine_result_normal.json"
-    #
+def plot_budgets():
+    paths = [("wine_vs_normalized_with_budget15.json", " budget = 15"),
+             ("wine_vs_normalized_with_budget10.json", " budget = 10"),
+             ("wine_vs_normalized_with_budget5.json", " budget = 5"),
+             ("wine_vs_normalized.json", "")
+             ]
+    names = ["wine_normal", "wine"]
+
+    for (path, info) in paths:
+        f = open(path)
+        raw_data = json.load(f)
+        for name in names:
+            data = raw_data[name]
+            budg = data["budgets"]
+            ari = data["ari"]
+            plt.plot(budg, ari, label=name + info, marker='x')
+
+    plt.xlabel("budget")
+    plt.ylabel("ari")
+
+    plt.legend()
+    plt.show()
+
+
+def normal_vs_mmc():
+    path = "./something.json"
     f = open(path)
-    normal = json.load(f)
+    raw_data = json.load(f)
+    budgets = raw_data["budget"]
+    print(budgets)
 
-    path = "wine_result_times_two.json"
-    f1 = open(path)
-    times_two = json.load(f1)
+    plt.plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
 
-    names = ["wine"]
+    markers = [".", "o", "x", "+", "v", ">"]
+    i = 0
+    for diag in [False, True]:
+        for init in ["identity", "covariance", "random"]:
+            plt.plot(budgets, raw_data["mmc"][f"{diag}, {init}"]["ari"], label=f"{diag}, {init}")
+            i += 1
 
-    for name in names:
-        data = normal[name]
-        budg = data["budgets"]
-        ari = data["ari"]
-        plt.plot(budg, ari, label=name + " normal", marker='x')
+    plt.title("normal vs mmc")
+    plt.legend()
+    plt.show()
 
-        data = times_two[name]
-        budg = data["budgets"]
-        ari = data["ari"]
-        plt.plot(budg, ari, label=name + " times two", marker='.')
 
-        plt.xlabel("budget")
-        plt.ylabel("ari")
+def normal_vs_itml():
+    path = "./something.json"
+    f = open(path)
+    raw_data = json.load(f)
+    budgets = raw_data["budget"]
+    print(budgets)
 
-        plt.legend()
-        plt.show()
+    plt.plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
 
-    for name in names:
-        data = normal[name]
-        budg = data["budgets"]
-        clv = data["clv"]
-        plt.plot(budg, clv, label=name + " normal", marker='x')
+    markers = [".", "o", "x", "+", "v", ">"]
+    i = 0
+    for init in ["identity", "covariance", "random"]:
+        plt.plot(budgets, raw_data["itml"][init]["ari"], label=init)
+        i += 1
 
-        data = times_two[name]
-        budg = data["budgets"]
-        clv = data["clv"]
-        plt.plot(budg, clv, label=name + " times two", marker='.')
+    plt.title("normal vs itml")
+    plt.legend()
+    plt.show()
 
-        plt.xlabel("budget")
-        plt.ylabel("clv")
 
-        plt.legend()
-        plt.show()
+def only_best():
+    mmc = "True, covariance"
+    itml = "covariance"
+    path = "./something.json"
+    f = open(path)
+    raw_data = json.load(f)
+    budgets = raw_data["budget"]
+    print(budgets)
+
+    fig, axs = plt.subplots(2, 1, sharex=True)
+
+    axs[0].plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
+    axs[0].plot(budgets, raw_data["mmc"][mmc]["ari"], label="mmc " + mmc, marker=".")
+    axs[0].plot(budgets, raw_data["itml"][itml]["ari"], label="itml " + itml, marker=".")
+
+    axs[0].set_ylabel("ari")
+
+    axs[1].plot(budgets, raw_data["normal"]["time"], label="normal", color="r")
+    axs[1].plot(budgets, raw_data["mmc"][mmc]["time"], label="mmc " + mmc, marker=".")
+    axs[1].plot(budgets, raw_data["itml"][itml]["time"], label="itml " + itml, marker=".")
+
+    axs[1].set_ylabel("time (s)")
+
+    plt.title("normal vs mmc vs itml")
+    plt.xlabel("budget")
+    plt.legend()
+    plt.show()
 
 
 if __name__ == "__main__":
-    main()
+    # normal_vs_mmc()
+    # normal_vs_itml()
+    only_best()
