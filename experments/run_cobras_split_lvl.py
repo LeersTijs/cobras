@@ -144,13 +144,15 @@ def test_itml(name, seed_number, info, budgets):
 
 
 def test_metric_learners():
-    tests = [("", None),
-             ("MMC", {"diagonal": [False, True],
-                      "init": ["identity", "covariance", "random"]}),
-             ("ITML", {"prior": ["identity", "covariance", "random"]})]
+    tests = [("ITML", {"prior": ["covariance"]})]
+    # tests = [("", None),
+    #          ("MMC", {"diagonal": [False, True],
+    #                   "init": ["identity", "covariance", "random"]}),
+    #          ("ITML", {"prior": ["identity", "covariance", "random"]})]
     name = "wine"
     seed_number = 31
-    budgets = range(5, 155, 5)
+    # budgets = range(5, 155, 5)
+    budgets = range(60, 61, 5)
     result = {"budget": [*budgets]}
     for (algo, info) in tests:
         print(f"--------------- testing: {algo} ---------------")

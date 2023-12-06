@@ -33,13 +33,23 @@ def normal_vs_mmc():
     budgets = raw_data["budget"]
     print(budgets)
 
-    plt.plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
+    fig, axs = plt.subplots(2, 1, sharex=True)
+
+    axs[0].plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
+    axs[1].plot(budgets, raw_data["normal"]["time"], label="normal", color="r")
+
+    axs[0].set_ylabel("ari")
+    axs[1].set_ylabel("time (s)")
+
+    # plt.plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
 
     markers = [".", "o", "x", "+", "v", ">"]
     i = 0
     for diag in [False, True]:
         for init in ["identity", "covariance", "random"]:
-            plt.plot(budgets, raw_data["mmc"][f"{diag}, {init}"]["ari"], label=f"{diag}, {init}")
+            axs[0].plot(budgets, raw_data["mmc"][f"{diag}, {init}"]["ari"], label=f"{diag}, {init}")
+            axs[1].plot(budgets, raw_data["mmc"][f"{diag}, {init}"]["time"], label=f"{diag}, {init}")
+            # plt.plot(budgets, raw_data["mmc"][f"{diag}, {init}"]["ari"], label=f"{diag}, {init}")
             i += 1
 
     plt.title("normal vs mmc")
@@ -54,12 +64,19 @@ def normal_vs_itml():
     budgets = raw_data["budget"]
     print(budgets)
 
-    plt.plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
+    fig, axs = plt.subplots(2, 1, sharex=True)
+
+    axs[0].plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
+    axs[1].plot(budgets, raw_data["normal"]["time"], label="normal", color="r")
+
+    axs[0].set_ylabel("ari")
+    axs[1].set_ylabel("time (s)")
 
     markers = [".", "o", "x", "+", "v", ">"]
     i = 0
     for init in ["identity", "covariance", "random"]:
-        plt.plot(budgets, raw_data["itml"][init]["ari"], label=init)
+        axs[0].plot(budgets, raw_data["itml"][init]["ari"], label=init)
+        axs[1].plot(budgets, raw_data["itml"][init]["time"], label=init)
         i += 1
 
     plt.title("normal vs itml")
@@ -97,6 +114,6 @@ def only_best():
 
 
 if __name__ == "__main__":
-    # normal_vs_mmc()
-    # normal_vs_itml()
+    normal_vs_mmc()
+    normal_vs_itml()
     only_best()

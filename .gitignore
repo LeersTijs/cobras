@@ -7,4 +7,4 @@ cobras_ts.egg-info/
 build/*
 dist/*
 
-test_file.py
+testing_metric_learners.py
