@@ -92,7 +92,8 @@ def get_data_summery(name: str, data, labels):
 def main():
     # names = ["iris", "yeast"]
     # names = ["iris", "wine", "ionosphere", "glass", "yeast", "test"]
-    names = ["wine_normal"]
+    # names = ["wine_normal"]
+    names = ["ionosphere"]
     for name in names:
         data, labels = get_data_set(name)
         print(get_data_summery(name, data, labels))

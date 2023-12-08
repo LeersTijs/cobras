@@ -268,6 +268,7 @@ class COBRAS_split_lvl(COBRAS):
             # choose the next super-instance to split
             to_split, originating_cluster = self.identify_superinstance_to_split()
             if to_split is None:
+                print("about to break")
                 break
 
             # clustering to store keeps the last valid clustering
@@ -285,7 +286,7 @@ class COBRAS_split_lvl(COBRAS):
             self.query_counter = 0
             split_level, _ = self.determine_split_level(to_split, clustering_to_store, debug=False,
                                                         budget=split_lvl_budget)
-            # print(f"split_level = {split_level}")
+            # split_level = max([split_level, 2])
             # split the chosen super-instance
             new_super_instances = self.split_superinstance(to_split, split_level)
 

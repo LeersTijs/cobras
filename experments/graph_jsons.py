@@ -1,5 +1,8 @@
 import json
+from copy import copy
+
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 
 def plot_budgets():
@@ -26,61 +29,63 @@ def plot_budgets():
     plt.show()
 
 
-def normal_vs_mmc():
-    path = "./something.json"
-    f = open(path)
-    raw_data = json.load(f)
-    budgets = raw_data["budget"]
-    print(budgets)
+def normal_vs_mmc(dataset, normal, mmc, info):
+    normal_budgets = [*range(normal["#queries"])]
+    # print(len(normal_budgets))
 
-    fig, axs = plt.subplots(2, 1, sharex=True)
+    fig, axs = plt.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
 
-    axs[0].plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
-    axs[1].plot(budgets, raw_data["normal"]["time"], label="normal", color="r")
+    axs[0].plot(normal_budgets, normal["ari"], label="normal", color="r", marker=".")
+    axs[1].plot(normal_budgets, normal["time"], color="r")
 
     axs[0].set_ylabel("ari")
     axs[1].set_ylabel("time (s)")
-
-    # plt.plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
+    axs[1].set_xlabel("budget")
 
     markers = [".", "o", "x", "+", "v", ">"]
     i = 0
-    for diag in [False, True]:
-        for init in ["identity", "covariance", "random"]:
-            axs[0].plot(budgets, raw_data["mmc"][f"{diag}, {init}"]["ari"], label=f"{diag}, {init}")
-            axs[1].plot(budgets, raw_data["mmc"][f"{diag}, {init}"]["time"], label=f"{diag}, {init}")
+    for diag in info["diagonal"]:
+        for init in info["init"]:
+            budgets = [*range(mmc[f"{diag}, {init}"]["#queries"])]
+            axs[0].plot(budgets, mmc[f"{diag}, {init}"]["ari"], label=f"{diag}, {init}")
+            axs[1].plot(budgets, mmc[f"{diag}, {init}"]["time"])
             # plt.plot(budgets, raw_data["mmc"][f"{diag}, {init}"]["ari"], label=f"{diag}, {init}")
             i += 1
 
-    plt.title("normal vs mmc")
-    plt.legend()
+    budgets = [*range(mmc["avg"]["#queries"])]
+    axs[0].plot(budgets, mmc["avg"]["ari"], label="avg", marker=".")
+    axs[1].plot(budgets, mmc["avg"]["time"])
+
+    fig.suptitle(f"normal vs mmc, on dataset: {dataset}")
+    fig.legend()
     plt.show()
 
 
-def normal_vs_itml():
-    path = "./something.json"
-    f = open(path)
-    raw_data = json.load(f)
-    budgets = raw_data["budget"]
-    print(budgets)
+def normal_vs_itml(dataset, normal, itml, info):
+    normal_budgets = [*range(normal["#queries"])]
+    fig, axs = plt.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
 
-    fig, axs = plt.subplots(2, 1, sharex=True)
-
-    axs[0].plot(budgets, raw_data["normal"]["ari"], label="normal", color="r")
-    axs[1].plot(budgets, raw_data["normal"]["time"], label="normal", color="r")
+    axs[0].plot(normal_budgets, normal["ari"], label="normal", color="r", marker=".")
+    axs[1].plot(normal_budgets, normal["time"], color="r")
 
     axs[0].set_ylabel("ari")
     axs[1].set_ylabel("time (s)")
+    axs[1].set_xlabel("budget")
 
     markers = [".", "o", "x", "+", "v", ">"]
     i = 0
-    for init in ["identity", "covariance", "random"]:
-        axs[0].plot(budgets, raw_data["itml"][init]["ari"], label=init)
-        axs[1].plot(budgets, raw_data["itml"][init]["time"], label=init)
+    for init in info["prior"]:
+        budgets = [*range(itml[init]["#queries"])]
+        axs[0].plot(budgets, itml[init]["ari"], label=init)
+        axs[1].plot(budgets, itml[init]["time"])
         i += 1
 
-    plt.title("normal vs itml")
-    plt.legend()
+    budgets = [*range(itml["avg"]["#queries"])]
+    axs[0].plot(budgets, itml["avg"]["ari"], label="avg", marker=".")
+    axs[1].plot(budgets, itml["avg"]["time"])
+
+    fig.suptitle(f"normal vs itml, on dataset: {dataset}")
+    fig.legend()
     plt.show()
 
 
@@ -113,7 +118,76 @@ def only_best():
     plt.show()
 
 
+def graph_all_datasets_mmc_vs_itml(datasets: list[str], all_data: dict):
+    # fig, axs = plt.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
+
+    # axs[0].set_ylabel("ari")
+    # axs[1].set_ylabel("time (s)")
+    # axs[1].set_xlabel("budget")
+
+    colors = ["b", "g", "r", "c", "m", "y", "k"]
+    i = 0
+    lines = []
+
+    for dataset in datasets:
+        # print(dataset)
+        data = all_data[dataset]
+        normal = data["normal"]
+        normal_budgets = [*range(normal["#queries"])]
+
+        mmc = data["mmc"]["avg"]
+        mmc_budgets = [*range(mmc["#queries"])]
+
+        itml = data["itml"]["avg"]
+        itml_budgets = [*range(itml["#queries"])]
+
+        plt.plot(normal_budgets, normal["ari"], label=dataset, color=colors[i])
+        plt.plot(mmc_budgets, mmc["ari"], color=colors[i], linestyle="--")
+        plt.plot(itml_budgets, itml["ari"], color=colors[i], linestyle=":")
+
+        lines.append(Line2D([0, 1], [0, 1], linestyle="-", color=colors[i]))
+
+        i += 1
+
+    lines.append(Line2D([0,1],[0,1], linestyle="-", color="k"))
+    lines.append(Line2D([0, 1], [0, 1], linestyle="--", color="k"))
+    lines.append(Line2D([0, 1], [0, 1], linestyle=":", color="k"))
+
+    names = copy(datasets)
+    names.append("COBRAS")
+    names.append("mmc")
+    names.append("itml")
+
+    plt.legend(lines, names)
+    plt.show()
+
+
+def graph_dataset(dataset: str, result: dict, info: dict):
+    normal_vs_mmc(dataset, result["normal"], result["mmc"], info["MMC"])
+    normal_vs_itml(dataset, result["normal"], result["itml"], info["ITML"])
+
+
+def graph_testing_metric_learning():
+    names = ["iris", "wine", "ionosphere", "glass", "yeast"]
+    info = {
+        "normal": None,
+        "MMC": {
+            "diagonal": [False, True],
+            "init": ["identity", "covariance", "random"]
+        },
+        "ITML": {
+            "prior": ["identity", "covariance", "random"]
+        }
+    }
+    path = "testing_metric_learning_full_budget/everything.json"
+    with open(path) as f:
+        all_data = json.load(f)
+
+    graph_all_datasets_mmc_vs_itml(names, all_data)
+
+    for dataset in names:
+        graph_dataset(dataset, all_data[dataset], info)
+
+
 if __name__ == "__main__":
-    normal_vs_mmc()
-    normal_vs_itml()
-    only_best()
+    graph_testing_metric_learning()
