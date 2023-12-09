@@ -30,12 +30,15 @@ def plot_budgets():
 
 
 def normal_vs_mmc(dataset, normal, mmc, info):
+    line_styles = ["--", ":", "-."]
+    colors = ["g", "c"]
+
     normal_budgets = [*range(normal["#queries"])]
     # print(len(normal_budgets))
 
     fig, axs = plt.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
 
-    axs[0].plot(normal_budgets, normal["ari"], label="normal", color="r", marker=".")
+    axs[0].plot(normal_budgets, normal["ari"], label="normal", color="r")
     axs[1].plot(normal_budgets, normal["time"], color="r")
 
     axs[0].set_ylabel("ari")
@@ -44,17 +47,25 @@ def normal_vs_mmc(dataset, normal, mmc, info):
 
     markers = [".", "o", "x", "+", "v", ">"]
     i = 0
+    j = 0
     for diag in info["diagonal"]:
+        color = colors[j]
         for init in info["init"]:
+            style = line_styles[i]
             budgets = [*range(mmc[f"{diag}, {init}"]["#queries"])]
-            axs[0].plot(budgets, mmc[f"{diag}, {init}"]["ari"], label=f"{diag}, {init}")
-            axs[1].plot(budgets, mmc[f"{diag}, {init}"]["time"])
+            extra_info = ""
+            if len(budgets) == 0:
+                extra_info = " : Error happened"
+            axs[0].plot(budgets, mmc[f"{diag}, {init}"]["ari"], label=f"{diag}, {init}" + extra_info, color=color, linestyle=style)
+            axs[1].plot(budgets, mmc[f"{diag}, {init}"]["time"], color=color, linestyle=style)
             # plt.plot(budgets, raw_data["mmc"][f"{diag}, {init}"]["ari"], label=f"{diag}, {init}")
             i += 1
+        j += 1
+        i = 0
 
     budgets = [*range(mmc["avg"]["#queries"])]
-    axs[0].plot(budgets, mmc["avg"]["ari"], label="avg", marker=".")
-    axs[1].plot(budgets, mmc["avg"]["time"])
+    axs[0].plot(budgets, mmc["avg"]["ari"], label="avg", color="b")
+    axs[1].plot(budgets, mmc["avg"]["time"], color="b")
 
     fig.suptitle(f"normal vs mmc, on dataset: {dataset}")
     fig.legend()
@@ -62,10 +73,12 @@ def normal_vs_mmc(dataset, normal, mmc, info):
 
 
 def normal_vs_itml(dataset, normal, itml, info):
+    # colors = ["g", "c", "m"]
+    line_styles = ["--", ":", "-."]
     normal_budgets = [*range(normal["#queries"])]
     fig, axs = plt.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
 
-    axs[0].plot(normal_budgets, normal["ari"], label="normal", color="r", marker=".")
+    axs[0].plot(normal_budgets, normal["ari"], label="normal", color="r")
     axs[1].plot(normal_budgets, normal["time"], color="r")
 
     axs[0].set_ylabel("ari")
@@ -76,13 +89,16 @@ def normal_vs_itml(dataset, normal, itml, info):
     i = 0
     for init in info["prior"]:
         budgets = [*range(itml[init]["#queries"])]
-        axs[0].plot(budgets, itml[init]["ari"], label=init)
-        axs[1].plot(budgets, itml[init]["time"])
+        extra_info = ""
+        if len(budgets) == 0:
+            extra_info = " : Error happened"
+        axs[0].plot(budgets, itml[init]["ari"], label=init + extra_info, color="g", linestyle=line_styles[i])
+        axs[1].plot(budgets, itml[init]["time"], color="g", linestyle=line_styles[i])
         i += 1
 
     budgets = [*range(itml["avg"]["#queries"])]
-    axs[0].plot(budgets, itml["avg"]["ari"], label="avg", marker=".")
-    axs[1].plot(budgets, itml["avg"]["time"])
+    axs[0].plot(budgets, itml["avg"]["ari"], label="avg", color="b")
+    axs[1].plot(budgets, itml["avg"]["time"], color="b")
 
     fig.suptitle(f"normal vs itml, on dataset: {dataset}")
     fig.legend()
@@ -119,12 +135,6 @@ def only_best():
 
 
 def graph_all_datasets_mmc_vs_itml(datasets: list[str], all_data: dict):
-    # fig, axs = plt.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
-
-    # axs[0].set_ylabel("ari")
-    # axs[1].set_ylabel("time (s)")
-    # axs[1].set_xlabel("budget")
-
     colors = ["b", "g", "r", "c", "m", "y", "k"]
     i = 0
     lines = []
@@ -179,7 +189,10 @@ def graph_testing_metric_learning():
             "prior": ["identity", "covariance", "random"]
         }
     }
-    path = "testing_metric_learning_full_budget/everything.json"
+    # info = {
+    #     "normal": None
+    # }
+    path = "testing_metric_learning/everything.json"
     with open(path) as f:
         all_data = json.load(f)
 

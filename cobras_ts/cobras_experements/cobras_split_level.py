@@ -286,7 +286,7 @@ class COBRAS_split_lvl(COBRAS):
             self.query_counter = 0
             split_level, _ = self.determine_split_level(to_split, clustering_to_store, debug=False,
                                                         budget=split_lvl_budget)
-            # split_level = max([split_level, 2])
+            split_level = max([split_level, 2])
             # split the chosen super-instance
             new_super_instances = self.split_superinstance(to_split, split_level)
 

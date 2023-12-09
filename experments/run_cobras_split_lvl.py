@@ -66,7 +66,7 @@ def test_budgets():
             json.dump(results, f)
 
 
-def test_normal(name, seed_number, info, budget, amount_of_runs):
+def test_normal(name: str, seed_number: int, info: dict, budget: int, amount_of_runs: int):
     data, labels = get_data_set(name)
     np.random.seed(seed_number)
 
@@ -110,27 +110,28 @@ def test_normal(name, seed_number, info, budget, amount_of_runs):
     return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs}
 
 
-def test_mmc(name, seed_number, info, budget, amount_of_runs):
+def test_mmc(name: str, seed_number: int, info: dict, budget: int, amount_of_runs: int):
     data, labels = get_data_set(name)
+    runs = {i: {} for i in range(amount_of_runs)}
 
-    runs = {}
+    hyper_parameters = [f"{diag}, {init}" for diag in info["diagonal"] for init in info["init"]]
 
-    for index in range(amount_of_runs):
-
-        result_of_one_run = dict()
-        for diag in info["diagonal"]:
-            print(f"----- diagonal: {diag}")
-            for init in info["init"]:
-                print(f"--- init: {init}")
+    for diag in info["diagonal"]:
+        print(f"----- diagonal: {diag}")
+        for init in info["init"]:
+            print(f"--- init: {init}")
+            np.random.seed(seed_number)
+            for index in range(amount_of_runs):
                 try:
-                    np.random.seed(seed_number)
                     start_time = time.time()
                     clusterer = COBRAS_split_lvl(data, LabelQuerier(labels),
                                                  max_questions=budget,
                                                  splitting_algo={"algo": "MMC", "diagonal": diag, "init": init})
                     clustering, intermediate_clustering, runtimes, ml, cl = clusterer.cluster()
                     end_time = time.time()
+
                     aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
+
                     clustering_labeling = clustering.construct_cluster_labeling()
                     ari = metrics.adjusted_rand_score(clustering_labeling, labels)
                     t = end_time - start_time
@@ -143,100 +144,35 @@ def test_mmc(name, seed_number, info, budget, amount_of_runs):
                     print("This probs happens cus initial_k = 1")
                     aris, runtimes = [], []
                     ml, cl = [], []
-                result_of_one_run[f"{diag}, {init}"] = {"#queries": len(ml) + len(cl), "ari": aris, "time": runtimes}
-                print()
+                runs[index][f"{diag}, {init}"] = {"#queries": len(ml) + len(cl), "ari": aris, "time": runtimes}
+            print()
 
-        # Avg over the 6 kinds of MMC
-        max_queries_asked = max(
-            [result_of_one_run[f"{diag}, {init}"]["#queries"] for diag in info["diagonal"] for init in info["init"]])
-
-        avg_ari = [0] * max_queries_asked
-        avg_time = [0] * max_queries_asked
-        count = [0] * max_queries_asked
-        for i in range(max_queries_asked):
-            for diag in info["diagonal"]:
-                for init in info["init"]:
-                    try:
-                        avg_ari[i] += result_of_one_run[f"{diag}, {init}"]["ari"][i]
-                        avg_time[i] += result_of_one_run[f"{diag}, {init}"]["time"][i]
-                        count[i] += 1
-                    except (IndexError, KeyError):
-                        continue
-
-        for i in range(max_queries_asked):
-            if count[i] > 0:
-                avg_ari[i] /= count[i]
-                avg_time[i] /= count[i]
-
-        result_of_one_run["avg"] = {"#queries": max_queries_asked, "ari": avg_ari, "time": avg_time}
-        runs[index] = result_of_one_run
-
-    result = {}
-    for diag in info["diagonal"]:
-        for init in info["init"]:
-            max_queries_asked = max([runs[index][f"{diag}, {init}"]["#queries"] for index in range(amount_of_runs)])
-
-            aris = [0] * max_queries_asked
-            times = [0] * max_queries_asked
-            count = [0] * max_queries_asked
-
-            for run_number in range(amount_of_runs):
-                for index in range(max_queries_asked):
-                    if index < runs[run_number][f"{diag}, {init}"]["#queries"]:
-                        aris[index] += runs[run_number][f"{diag}, {init}"]["ari"][index]
-                        times[index] += runs[run_number][f"{diag}, {init}"]["time"][index]
-                        count[index] += 1
-            for i in range(max_queries_asked):
-                aris[i] /= count[i]
-                times[i] /= count[i]
-            result[f"{diag}, {init}"] = {"#queries": max_queries_asked, "ari": aris, "time": times}
-
-    max_queries_asked = max(
-        [result[f"{diag}, {init}"]["#queries"] for diag in info["diagonal"] for init in info["init"]])
-    avg_ari = [0] * max_queries_asked
-    avg_time = [0] * max_queries_asked
-    count = [0] * max_queries_asked
-    for i in range(max_queries_asked):
-        for diag in info["diagonal"]:
-            for init in info["init"]:
-                try:
-                    avg_ari[i] += result[f"{diag}, {init}"]["ari"][i]
-                    avg_time[i] += result[f"{diag}, {init}"]["time"][i]
-                    count[i] += 1
-                except (IndexError, KeyError):
-                    continue
-
-    for i in range(max_queries_asked):
-        if count[i] > 0:
-            avg_ari[i] /= count[i]
-            avg_time[i] /= count[i]
-
-    result["avg"] = {"#queries": max_queries_asked, "ari": avg_ari, "time": avg_time}
-
+    result = avg_over_runs(hyper_parameters, runs, amount_of_runs)
+    result["avg"] = avg_over_parameters(hyper_parameters, result)
     result["runs"] = runs
 
     return result
 
 
-def test_itml(name, seed_number, info, budget, amount_of_runs):
+def test_itml(name: str, seed_number: int, info: dict, budget: int, amount_of_runs: int):
     data, labels = get_data_set(name)
 
-    runs = {}
-
-    for index in range(amount_of_runs):
-
-        result_of_one_run = dict()
-        for prior in info["prior"]:
-            print(f"------ prior: {prior}")
+    # Get result of every run. (Struct: runs = { 0: "identity": {"#": x, "ari": x, "time": x}, "covariance": {}}
+    runs = {i: {} for i in range(amount_of_runs)}
+    for prior in info["prior"]:
+        print(f"------ prior: {prior}")
+        np.random.seed(seed_number)
+        for index in range(amount_of_runs):
             try:
-                np.random.seed(seed_number)
                 start_time = time.time()
                 clusterer = COBRAS_split_lvl(data, LabelQuerier(labels),
                                              max_questions=budget,
                                              splitting_algo={"algo": "ITML", "prior": prior})
                 clustering, intermediate_clustering, runtimes, ml, cl = clusterer.cluster()
                 end_time = time.time()
+
                 aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
+
                 clustering_labeling = clustering.construct_cluster_labeling()
                 ari = metrics.adjusted_rand_score(clustering_labeling, labels)
                 t = end_time - start_time
@@ -245,61 +181,30 @@ def test_itml(name, seed_number, info, budget, amount_of_runs):
                       f"time: {t}, "
                       f"amount of queries asked: {len(ml) + len(cl)}")
             except Exception as e:
-                print("Error happened:", e)
+                print("Error happened: ", e)
                 aris, runtimes = [], []
                 ml, cl = [], []
-            print()
-            result_of_one_run[prior] = {"#queries": len(ml) + len(cl), "ari": aris, "time": runtimes}
+            runs[index][prior] = {"#queries": len(ml) + len(cl), "ari": aris, "time": runtimes}
+        print()
 
-        # Avg over the 3 kinds of ITML
-        max_queries_asked = max([result_of_one_run[prior]["#queries"] for prior in info["prior"]])
-        avg_ari = [0] * max_queries_asked
-        avg_time = [0] * max_queries_asked
-        count = [0] * max_queries_asked
-        for i in range(max_queries_asked):
-            for prior in info["prior"]:
-                try:
-                    avg_ari[i] += result_of_one_run[prior]["ari"][i]
-                    avg_time[i] += result_of_one_run[prior]["time"][i]
-                    count[i] += 1
-                except (IndexError, KeyError):
-                    continue
+    # Calc the Avg over the runs
+    result = avg_over_runs(info["prior"], runs, amount_of_runs)
+    result["avg"] = avg_over_parameters(info["prior"], result)
+    result["runs"] = runs
 
-        for i in range(max_queries_asked):
-            if count[i] > 0:
-                avg_ari[i] /= count[i]
-                avg_time[i] /= count[i]
+    return result
 
-        result_of_one_run["avg"] = {"#queries": max_queries_asked, "ari": avg_ari, "time": avg_time}
-        runs[index] = result_of_one_run
 
-    result = {}
-    for prior in info["prior"]:
-        max_queries_asked = max([runs[index][prior]["#queries"] for index in range(amount_of_runs)])
-
-        aris = [0] * max_queries_asked
-        times = [0] * max_queries_asked
-        count = [0] * max_queries_asked
-        for run_number in range(amount_of_runs):
-            for index in range(max_queries_asked):
-                if index < runs[run_number][prior]["#queries"]:
-                    aris[index] += runs[run_number][prior]["ari"][index]
-                    times[index] += runs[run_number][prior]["time"][index]
-                    count[index] += 1
-        for i in range(max_queries_asked):
-            aris[i] /= count[i]
-            times[i] /= count[i]
-        result[prior] = {"#queries": max_queries_asked, "ari": aris, "time": times}
-
-    max_queries_asked = max([result[prior]["#queries"] for prior in info["prior"]])
+def avg_over_parameters(hyper_parameters: list[str], data: dict):
+    max_queries_asked = max([data[parm]["#queries"] for parm in hyper_parameters])
     avg_ari = [0] * max_queries_asked
     avg_time = [0] * max_queries_asked
     count = [0] * max_queries_asked
     for i in range(max_queries_asked):
-        for prior in info["prior"]:
+        for parm in hyper_parameters:
             try:
-                avg_ari[i] += result[prior]["ari"][i]
-                avg_time[i] += result[prior]["time"][i]
+                avg_ari[i] += data[parm]["ari"][i]
+                avg_time[i] += data[parm]["time"][i]
                 count[i] += 1
             except (IndexError, KeyError):
                 continue
@@ -309,26 +214,32 @@ def test_itml(name, seed_number, info, budget, amount_of_runs):
             avg_ari[i] /= count[i]
             avg_time[i] /= count[i]
 
-    result["avg"] = {"#queries": max_queries_asked, "ari": avg_ari, "time": avg_time}
+    return {"#queries": max_queries_asked, "ari": avg_ari, "time": avg_time}
 
-    result["runs"] = runs
 
+def avg_over_runs(hyper_parameters: list[str], runs: dict, amount_of_runs):
+    result = {}
+    for parm in hyper_parameters:
+        max_queries_asked = max([runs[index][parm]["#queries"] for index in range(amount_of_runs)])
+
+        aris = [0] * max_queries_asked
+        times = [0] * max_queries_asked
+        count = [0] * max_queries_asked
+        for run_number in range(amount_of_runs):
+            for index in range(max_queries_asked):
+                if index < runs[run_number][parm]["#queries"]:
+                    aris[index] += runs[run_number][parm]["ari"][index]
+                    times[index] += runs[run_number][parm]["time"][index]
+                    count[index] += 1
+        for i in range(max_queries_asked):
+            aris[i] /= count[i]
+            times[i] /= count[i]
+        result[parm] = {"#queries": max_queries_asked, "ari": aris, "time": times}
     return result
 
 
-def test_metric_learners():
-    tests = [("normal", None),
-             ("MMC", {"diagonal": [False, True],
-                      "init": ["identity", "covariance", "random"]}),
-             ("ITML", {"prior": ["identity", "covariance", "random"]})]
-    seed_number = 31
-    budget = 150
-    amount_of_runs = 2
-
-    names = ["iris"]
-    # names = ["iris", "wine", "ionosphere", "glass", "yeast"]
-
-    for name in names:
+def test_metric_learners(datasets, tests, path, seed_number, budget, amount_of_runs):
+    for name in datasets:
         print(f"################ Using DataSet: {name} ################")
         dataset_result = {}
         for (algo, info) in tests:
@@ -350,15 +261,11 @@ def test_metric_learners():
         json_object = re.sub(r'": \[\s+', '": [', json_object)
         json_object = re.sub(r'(\d),\s+', r'\1, ', json_object)
         json_object = re.sub(r'(\d)\n\s+]', r'\1]', json_object)
-        with open(f"testing_metric_learning_full_budget/{name}.json", "w") as f:
+        with open(f"{path}/{name}.json", "w") as f:
             f.write(json_object)
 
-    # put_all_tests_in_one_json()
 
-
-def put_all_tests_in_one_json():
-    names = ["iris", "wine", "ionosphere", "glass", "yeast"]
-    path = "testing_metric_learning_full_budget/"
+def put_all_tests_in_one_json(path: str, names):
     result = {}
     for name in names:
         real_path = path + f"{name}.json"
@@ -373,5 +280,18 @@ def put_all_tests_in_one_json():
         f.write(json_object)
 
 
+def main():
+    path = "testing_metric_learning_full_budget/"
+    # sets = ["iris"]
+    sets = ["iris", "wine", "ionosphere", "glass", "yeast"]
+    tests_to_run = [("normal", None),
+                    ("MMC", {"diagonal": [False, True],
+                             "init": ["identity", "covariance", "random"]}),
+                    ("ITML", {"prior": ["identity", "covariance", "random"]})]
+    seed, max_budget, n = 31, 150, 5
+    test_metric_learners(sets, tests_to_run, path, seed, max_budget, n)
+    put_all_tests_in_one_json(path, sets)
+
+
 if __name__ == "__main__":
-    test_metric_learners()
+    main()
