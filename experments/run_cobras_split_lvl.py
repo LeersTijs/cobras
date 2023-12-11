@@ -5,6 +5,7 @@ from warnings import simplefilter
 
 import numpy as np
 from sklearn import metrics
+from sklearn.exceptions import ConvergenceWarning
 
 from cobras_ts.cobras_experements.cobras_split_level import COBRAS_split_lvl
 from cobras_ts.cobras_kmeans import COBRAS_kmeans
@@ -13,6 +14,7 @@ from experments.get_data_set import get_data_set
 
 simplefilter(action='ignore', category=FutureWarning)
 simplefilter(action='ignore', category=RuntimeWarning)
+simplefilter(action='ignore', category=ConvergenceWarning)
 
 
 def test_split_lvl(name, start_budget=5, end_budget=100, jumps=5, n=10, split_budget=np.inf):
@@ -141,7 +143,6 @@ def test_mmc(name: str, seed_number: int, info: dict, budget: int, amount_of_run
                           f"amount of queries asked: {len(ml) + len(cl)}")
                 except Exception as e:
                     print("Error happened: ", e)
-                    print("This probs happens cus initial_k = 1")
                     aris, runtimes = [], []
                     ml, cl = [], []
                 runs[index][f"{diag}, {init}"] = {"#queries": len(ml) + len(cl), "ari": aris, "time": runtimes}
@@ -281,16 +282,18 @@ def put_all_tests_in_one_json(path: str, names):
 
 
 def main():
-    path = "testing_metric_learning_full_budget/"
-    # sets = ["iris"]
-    sets = ["iris", "wine", "ionosphere", "glass", "yeast"]
+    # path = "testing_metric_learning_full_budget/"
+    path = "testing_transformation_full_budget/"
+    tested_sets = ["iris", "ionosphere", "glass", "yeast", "normal_wine", "normal_wine_ax0", "wine"]
+    # tested_sets = ["wine", "normal_wine", "normal_wine_ax0"]
+    all_sets = ["iris", "ionosphere", "glass", "yeast", "normal_wine", "normal_wine_ax0", "wine"]
     tests_to_run = [("normal", None),
                     ("MMC", {"diagonal": [False, True],
                              "init": ["identity", "covariance", "random"]}),
                     ("ITML", {"prior": ["identity", "covariance", "random"]})]
-    seed, max_budget, n = 31, 150, 5
-    test_metric_learners(sets, tests_to_run, path, seed, max_budget, n)
-    put_all_tests_in_one_json(path, sets)
+    seed, max_budget, n = 31, 150, 1
+    test_metric_learners(tested_sets, tests_to_run, path, seed, max_budget, n)
+    put_all_tests_in_one_json(path, all_sets)
 
 
 if __name__ == "__main__":

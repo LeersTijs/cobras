@@ -178,7 +178,8 @@ def graph_dataset(dataset: str, result: dict, info: dict):
 
 
 def graph_testing_metric_learning():
-    names = ["iris", "wine", "ionosphere", "glass", "yeast"]
+    names = ["iris", "ionosphere", "glass", "yeast", "wine"]
+    # names = ["iris"]
     info = {
         "normal": None,
         "MMC": {
@@ -192,14 +193,15 @@ def graph_testing_metric_learning():
     # info = {
     #     "normal": None
     # }
-    path = "testing_metric_learning/everything.json"
+    # path = "testing_metric_learning_full_budget/everything.json"
+    path = "testing_transformation_full_budget/everything.json"
     with open(path) as f:
         all_data = json.load(f)
 
     graph_all_datasets_mmc_vs_itml(names, all_data)
 
-    for dataset in names:
-        graph_dataset(dataset, all_data[dataset], info)
+    # for dataset in names:
+    #     graph_dataset(dataset, all_data[dataset], info)
 
 
 if __name__ == "__main__":

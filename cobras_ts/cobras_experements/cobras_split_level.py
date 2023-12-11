@@ -118,17 +118,17 @@ class COBRAS_split_lvl(COBRAS):
                                        train_indices=self.train_indices,
                                        parent=parent)
 
-    def determine_split_level(self, superinstance, clustering_to_store,
-                              depth=0, debug=False, node=None, budget=np.inf):
+    def search_whole_splitting_tree(self, superinstance, clustering_to_store, depth=0, debug=False, node=None,
+                                    budget=np.inf):
         """
-        Determine the splitting level for the given super-instance using a small amount of queries
+                Determine the splitting level for the given super-instance using a small amount of queries
 
-        For each query that is posed during the execution of this method the given clustering_to_store is stored as an intermediate result.
-        The provided clustering_to_store should be the last valid clustering that is available
+                For each query that is posed during the execution of this method the given clustering_to_store is stored as an intermediate result.
+                The provided clustering_to_store should be the last valid clustering that is available
 
-        :return: the splitting level k, flag for indication if a prediction should be done
-        :rtype: int, bool
-        """
+                :return: the splitting level k, flag for indication if a prediction should be done
+                :rtype: int, bool
+                """
         if debug and node is None:
             node = Splitting_level_node(len(superinstance.indices))
 
@@ -188,15 +188,17 @@ class COBRAS_split_lvl(COBRAS):
 
             if not over_budget:
                 max_split = len(si.indices)
-                left_split, over_budget = self.determine_split_level(left_child, clustering_to_store, depth=depth + 1,
-                                                                     debug=debug, node=left_node, budget=budget)
+                left_split, over_budget = self.search_whole_splitting_tree(left_child, clustering_to_store,
+                                                                           depth=depth + 1,
+                                                                           debug=debug, node=left_node, budget=budget)
                 if debug and over_budget:
                     right_split = left_split
                     right_node.return_value = left_split
                 else:
-                    right_split, over_budget = self.determine_split_level(right_child, clustering_to_store,
-                                                                          depth=depth + 1, debug=debug, node=right_node,
-                                                                          budget=budget)
+                    right_split, over_budget = self.search_whole_splitting_tree(right_child, clustering_to_store,
+                                                                                depth=depth + 1, debug=debug,
+                                                                                node=right_node,
+                                                                                budget=budget)
                 min_split = min(max_split, left_split + right_split)
                 # Make use of the return flag, to predict the right_child
                 split_level = max(2, min_split)
@@ -209,6 +211,12 @@ class COBRAS_split_lvl(COBRAS):
                 print_tree(node)
         # print(f"over_budget: {over_budget}, counter: {self.query_counter}, max: {budget}")
         return split_level, over_budget
+
+    def determine_split_level(self, superinstance, clustering_to_store,
+                              depth=0, debug=False, node=None, budget=np.inf):
+        splitting_level, _ = self.search_whole_splitting_tree(superinstance, clustering_to_store, depth, debug, node,
+                                                              budget)
+        return max([splitting_level, 2])  # So that we never try to split a SI into 1.
 
     def cluster(self, split_lvl_budget=np.inf):
         """Perform clustering
@@ -236,9 +244,10 @@ class COBRAS_split_lvl(COBRAS):
         # the split level for this initial super-instance is determined,
         # the super-instance is split, and a new cluster is created for each of the newly created super-instances
         self.query_counter = 0
-        initial_k, _ = self.determine_split_level(initial_superinstance,
-                                                  copy.deepcopy(self.clustering.construct_cluster_labeling()),
-                                                  debug=False, budget=split_lvl_budget)
+        initial_k = self.determine_split_level(initial_superinstance,
+                                               copy.deepcopy(self.clustering.construct_cluster_labeling()),
+                                               debug=False, budget=split_lvl_budget)
+        print(f"initial_k = {initial_k}")
         # split the super-instance and place each new super-instance in its own cluster
         if self.splitting_algo["algo"] == "":
             superinstances = self.split_superinstance(initial_superinstance, initial_k)
@@ -284,9 +293,9 @@ class COBRAS_split_lvl(COBRAS):
             # - splitting phase -
             # determine the splitlevel
             self.query_counter = 0
-            split_level, _ = self.determine_split_level(to_split, clustering_to_store, debug=False,
-                                                        budget=split_lvl_budget)
-            split_level = max([split_level, 2])
+            split_level = self.determine_split_level(to_split, clustering_to_store, debug=False,
+                                                     budget=split_lvl_budget)
+
             # split the chosen super-instance
             new_super_instances = self.split_superinstance(to_split, split_level)
 

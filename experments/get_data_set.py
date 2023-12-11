@@ -37,12 +37,20 @@ def saving_norm_wine_data():
     path += "Wine/wine.data"
     data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
     labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[0])
-    data_ax1 = preprocessing.normalize(data, axis=1)
-    # data_ax0 = preprocessing.normalize(data, axis=0)
-    con_ax1 = np.column_stack((labels, data_ax1))
-    # con_ax0 = np.column_stack((labels, data_ax0))
-    np.savetxt("D:/School/2023-2024/thesis/dataSets/Wine_test/wine_test_ax1.data", con_ax1, delimiter=",")
-    # np.savetxt("D:/School/2023-2024/thesis/dataSets/Wine_test/wine_test_ax0.data", con_ax0, delimiter=",")
+    normalized_data = preprocessing.normalize(data, axis=1)
+    labels_with_data = np.column_stack((labels, normalized_data))
+    np.savetxt("D:/School/2023-2024/thesis/dataSets/Normalized_wine/normal_wine.data", labels_with_data, delimiter=",")
+
+
+def saving_norm_wine_data_ax0():
+    path = "D:/School/2023-2024/thesis/dataSets/"
+    path += "Wine/wine.data"
+    data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
+    labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[0])
+    normalized_data = preprocessing.normalize(data, axis=0)
+    labels_with_data = np.column_stack((labels, normalized_data))
+    np.savetxt("D:/School/2023-2024/thesis/dataSets/Normalized_wine_ax0/normal_wine_ax0.data", labels_with_data,
+               delimiter=",")
 
 
 def get_data_set(name: str):
@@ -75,8 +83,12 @@ def get_data_set(name: str):
             path += "Test/test.data"
             data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
             labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[0])
-        case "wine_normal":
-            path += "Wine_test/wine_test_ax0.data"
+        case "normal_wine":
+            path += "Normalized_wine/normal_wine.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
+            labels = np.loadtxt(path, delimiter=',', usecols=[0]).astype(np.int32)
+        case "normal_wine_ax0":
+            path += "Normalized_wine_ax0/normal_wine_ax0.data"
             data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
             labels = np.loadtxt(path, delimiter=',', usecols=[0]).astype(np.int32)
 
@@ -93,7 +105,7 @@ def main():
     # names = ["iris", "yeast"]
     # names = ["iris", "wine", "ionosphere", "glass", "yeast", "test"]
     # names = ["wine_normal"]
-    names = ["ionosphere"]
+    names = ["wine", "normal_wine", "normal_wine_ax0"]
     for name in names:
         data, labels = get_data_set(name)
         print(get_data_summery(name, data, labels))
@@ -105,6 +117,8 @@ def main():
 
 
 if __name__ == "__main__":
+    saving_norm_wine_data_ax0()
+    saving_norm_wine_data()
     main()
     # path = "D:/School/2023-2024/thesis/dataSets/Yeast/yeast.data"
     # data = np.genfromtxt(path, delimiter=',', dtype=str)
