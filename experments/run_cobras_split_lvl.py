@@ -8,6 +8,7 @@ from sklearn import metrics
 from sklearn.exceptions import ConvergenceWarning
 
 from cobras_ts.cobras_experements.cobras_split_level import COBRAS_split_lvl
+from cobras_ts.cobras_experements.cobras_transform import COBRAS_transform
 from cobras_ts.cobras_kmeans import COBRAS_kmeans
 from cobras_ts.querier import LabelQuerier
 from experments.get_data_set import get_data_set
@@ -126,6 +127,9 @@ def test_mmc(name: str, seed_number: int, info: dict, budget: int, amount_of_run
             for index in range(amount_of_runs):
                 try:
                     start_time = time.time()
+                    # clusterer = COBRAS_transform(data, LabelQuerier(labels),
+                    #                              max_questions=budget,
+                    #                              splitting_algo={"algo": "MMC", "diagonal": diag, "init": init})
                     clusterer = COBRAS_split_lvl(data, LabelQuerier(labels),
                                                  max_questions=budget,
                                                  splitting_algo={"algo": "MMC", "diagonal": diag, "init": init})
@@ -166,9 +170,12 @@ def test_itml(name: str, seed_number: int, info: dict, budget: int, amount_of_ru
         for index in range(amount_of_runs):
             try:
                 start_time = time.time()
-                clusterer = COBRAS_split_lvl(data, LabelQuerier(labels),
+                clusterer = COBRAS_transform(data, LabelQuerier(labels),
                                              max_questions=budget,
                                              splitting_algo={"algo": "ITML", "prior": prior})
+                # clusterer = COBRAS_split_lvl(data, LabelQuerier(labels),
+                #                              max_questions=budget,
+                #                              splitting_algo={"algo": "ITML", "prior": prior})
                 clustering, intermediate_clustering, runtimes, ml, cl = clusterer.cluster()
                 end_time = time.time()
 
@@ -188,7 +195,6 @@ def test_itml(name: str, seed_number: int, info: dict, budget: int, amount_of_ru
             runs[index][prior] = {"#queries": len(ml) + len(cl), "ari": aris, "time": runtimes}
         print()
 
-    # Calc the Avg over the runs
     result = avg_over_runs(info["prior"], runs, amount_of_runs)
     result["avg"] = avg_over_parameters(info["prior"], result)
     result["runs"] = runs
@@ -228,6 +234,7 @@ def avg_over_runs(hyper_parameters: list[str], runs: dict, amount_of_runs):
         count = [0] * max_queries_asked
         for run_number in range(amount_of_runs):
             for index in range(max_queries_asked):
+                q = runs[run_number][parm]["#queries"]
                 if index < runs[run_number][parm]["#queries"]:
                     aris[index] += runs[run_number][parm]["ari"][index]
                     times[index] += runs[run_number][parm]["time"][index]
@@ -262,8 +269,8 @@ def test_metric_learners(datasets, tests, path, seed_number, budget, amount_of_r
         json_object = re.sub(r'": \[\s+', '": [', json_object)
         json_object = re.sub(r'(\d),\s+', r'\1, ', json_object)
         json_object = re.sub(r'(\d)\n\s+]', r'\1]', json_object)
-        with open(f"{path}/{name}.json", "w") as f:
-            f.write(json_object)
+        # with open(f"{path}/{name}.json", "w") as f:
+        #     f.write(json_object)
 
 
 def put_all_tests_in_one_json(path: str, names):
@@ -283,17 +290,19 @@ def put_all_tests_in_one_json(path: str, names):
 
 def main():
     # path = "testing_metric_learning_full_budget/"
-    path = "testing_transformation_full_budget/"
-    tested_sets = ["iris", "ionosphere", "glass", "yeast", "normal_wine", "normal_wine_ax0", "wine"]
-    # tested_sets = ["wine", "normal_wine", "normal_wine_ax0"]
+    path = "testing_trans_min_queries_20/"
+    # sets_to_test = ["iris", "ionosphere", "glass", "yeast", "normal_wine", "normal_wine_ax0", "wine"]
+    # sets_to_test = ["wine", "normal_wine", "normal_wine_ax0"]
+    sets_to_test = ["wine"]
     all_sets = ["iris", "ionosphere", "glass", "yeast", "normal_wine", "normal_wine_ax0", "wine"]
-    tests_to_run = [("normal", None),
-                    ("MMC", {"diagonal": [False, True],
-                             "init": ["identity", "covariance", "random"]}),
-                    ("ITML", {"prior": ["identity", "covariance", "random"]})]
-    seed, max_budget, n = 31, 150, 1
-    test_metric_learners(tested_sets, tests_to_run, path, seed, max_budget, n)
-    put_all_tests_in_one_json(path, all_sets)
+    # tests_to_run = [("normal", None),
+    #                 ("MMC", {"diagonal": [False, True],
+    #                          "init": ["identity", "covariance", "random"]}),
+    #                 ("ITML", {"prior": ["identity", "covariance", "random"]})]
+    tests_to_run = [("normal", None), ("MMC", {"diagonal": [False], "init": ["identity"]})]
+    seed, max_budget, n = 31, 150, 3
+    test_metric_learners(sets_to_test, tests_to_run, path, seed, max_budget, n)
+    # put_all_tests_in_one_json(path, all_sets)
 
 
 if __name__ == "__main__":

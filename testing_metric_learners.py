@@ -58,6 +58,17 @@ def test_itml(data, indices, cl, ml):
     print(f"time: {end_time - start_time}")
 
 
+def test_sdml():
+    from metric_learn import SDML_Supervised
+    from sklearn.datasets import load_iris
+    iris_data = load_iris()
+    X = iris_data['data']
+    Y = iris_data['target']
+    sdml = SDML_Supervised(n_constraints=200)
+    sdml.fit(X, Y)
+    # print(f"time: {end_time - start_time}")
+
+
 def main():
     data, labels = get_data_set("test")
     indices = [0, 1, 2, 3, 4, 5, 6]
@@ -67,21 +78,24 @@ def main():
     print(labels[indices])
 
     print("MMC")
-    test_mmc(data, indices, cl, ml)
+    # test_mmc(data, indices, cl, ml)
 
     print("\nITML")
-    test_itml(data, indices, cl, ml)
+    # test_itml(data, indices, cl, ml)
 
     print("\nLSML")
     print("No, the fit uses quadruplets. The method is made for the case were pairwise constraint are difficlult to "
           "obtain")
 
     print("\nSDML")
-    print("Unable to run it, problem with skggm")
+    test_sdml()
+    # print("Unable to run it, problem with skggm")
 
     print("\nSCML")
     print("No, it uses triplets. (A, B, C). so A should be closer to B then C")
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    import sys
+    print(sys.version)

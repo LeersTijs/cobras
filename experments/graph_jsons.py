@@ -194,14 +194,16 @@ def graph_testing_metric_learning():
     #     "normal": None
     # }
     # path = "testing_metric_learning_full_budget/everything.json"
+    # path = "testing_trans_min_queries_20/everything.json"
+    # path = "testing_metric_learning/everything.json"
     path = "testing_transformation_full_budget/everything.json"
     with open(path) as f:
         all_data = json.load(f)
 
     graph_all_datasets_mmc_vs_itml(names, all_data)
 
-    # for dataset in names:
-    #     graph_dataset(dataset, all_data[dataset], info)
+    for dataset in names:
+        graph_dataset(dataset, all_data[dataset], info)
 
 
 if __name__ == "__main__":

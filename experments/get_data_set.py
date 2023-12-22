@@ -103,9 +103,9 @@ def get_data_summery(name: str, data, labels):
 
 def main():
     # names = ["iris", "yeast"]
-    # names = ["iris", "wine", "ionosphere", "glass", "yeast", "test"]
+    names = ["iris", "wine", "ionosphere", "glass", "yeast", "test"]
     # names = ["wine_normal"]
-    names = ["wine", "normal_wine", "normal_wine_ax0"]
+    # names = ["wine", "normal_wine", "normal_wine_ax0"]
     for name in names:
         data, labels = get_data_set(name)
         print(get_data_summery(name, data, labels))
@@ -117,8 +117,8 @@ def main():
 
 
 if __name__ == "__main__":
-    saving_norm_wine_data_ax0()
-    saving_norm_wine_data()
+    # saving_norm_wine_data_ax0()
+    # saving_norm_wine_data()
     main()
     # path = "D:/School/2023-2024/thesis/dataSets/Yeast/yeast.data"
     # data = np.genfromtxt(path, delimiter=',', dtype=str)

@@ -50,7 +50,7 @@ class COBRAS_split_lvl(COBRAS):
 
         return training
 
-    def __convert_index_to_local(self, indices):
+    def convert_index_to_local(self, indices):
         conversion_dict = {}
         pairs, labels = [], []
         for (tuples, label) in [(self.cl, "cl"), (self.ml, "ml")]:
@@ -71,7 +71,7 @@ class COBRAS_split_lvl(COBRAS):
 
     def split_superinstance_using_cl_ml(self, si, k):
         data_to_cluster = self.data[si.indices, :]
-        pairs, labels = self.__convert_index_to_local(si.indices)
+        pairs, labels = self.convert_index_to_local(si.indices)
 
         match self.splitting_algo["algo"]:
             case "MMC":
@@ -246,7 +246,7 @@ class COBRAS_split_lvl(COBRAS):
         self.query_counter = 0
         initial_k = self.determine_split_level(initial_superinstance,
                                                copy.deepcopy(self.clustering.construct_cluster_labeling()),
-                                               debug=False, budget=split_lvl_budget)
+                                               debug=True, budget=split_lvl_budget)
         print(f"initial_k = {initial_k}")
         # split the super-instance and place each new super-instance in its own cluster
         if self.splitting_algo["algo"] == "":
