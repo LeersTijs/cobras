@@ -1,11 +1,15 @@
+from dtaidistance.clustering import KMeans
+
 from experments.get_data_set import get_data_set
 import metric_learn
 import time
 
 from warnings import simplefilter
-from sklearn.cluster import KMeans
+# from sklearn.cluster import KMeans
 
 simplefilter(action='ignore', category=FutureWarning)
+
+
 
 
 def __convert_index_to_local(indices, cl, ml):

@@ -34,51 +34,96 @@ def plot_set_and_its_clustering(X, y, cl: list[tuple], ml: list[tuple], transfor
     ax_transformed_data = axs[0, 1]
     ax_transformed_clustered = axs[1, 1]
 
-    fig.suptitle("comparison of Kmeans on the normal and transformed data")
-
-    X_data = X
     if X.shape[1] > 2:
+        fig.suptitle("comparison of Kmeans on the normal and transformed data, the data has more than 2 dimension. So "
+                     "we use TSNE to reduce it")
+
         tsne = TSNE(n_components=2)
-        X_data = tsne.fit_transform(X)
+        X_tsne = tsne.fit_transform(X)
 
-    # Plot the normal data
-    ax_normal_data.set_title("The normal data, with the constraints")
-    ax_normal_data.scatter(X_data[:, 0], X_data[:, 1], c=y, cmap=colormap)
-    plot_lines(ax_normal_data, X_data, cl, "r")
-    plot_lines(ax_normal_data, X_data, ml, "g")
+        ax_normal_data.set_title("The normal data, with the constraints")
+        ax_normal_data.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y, cmap=colormap)
+        plot_lines(ax_normal_data, X_tsne, cl, "r")
+        plot_lines(ax_normal_data, X_tsne, ml, "g")
 
-    # Plot the result of Kmeans
-    km = KMeans(n_clusters=len(set(y)))
-    km.fit(X_data)
-    kmeans_labels = km.labels_.astype(np.int32)
-    ax_normal_clustered.set_title(f"Result of Kmeans, with ari: {metrics.adjusted_rand_score(kmeans_labels, y)}")
-    ax_normal_clustered.scatter(X_data[:, 0], X_data[:, 1], c=kmeans_labels, cmap=colormap)
+        # Plot the result of Kmeans
+        km = KMeans(n_clusters=len(set(y)))
+        km.fit(X)
+        kmeans_labels = km.labels_.astype(np.int32)
+        ax_normal_clustered.set_title(f"Result of Kmeans, with ari: {metrics.adjusted_rand_score(kmeans_labels, y)}")
+        ax_normal_clustered.scatter(X_tsne[:, 0], X_tsne[:, 1], c=kmeans_labels, cmap=colormap)
 
-    if transformer == "ITML":
-        learner = metric_learn.ITML(preprocessor=X_data, prior="random")
-    elif transformer == "MMC":
-        print(X_data)
-        learner = metric_learn.MMC(preprocessor=X_data, init="identity", diagonal=True)
+        if transformer == "ITML":
+            learner = metric_learn.ITML(preprocessor=X, prior="random")
+        elif transformer == "MMC":
+            print(X)
+            learner = metric_learn.MMC(preprocessor=X, init="identity", diagonal=True)
+        else:
+            raise Exception("should never happen")
+
+        indices = [*range(X.shape[0])]
+        pairs, label = convert_cl_ml_to_pairs(indices, cl, ml)
+        print(pairs)
+        print(label)
+        learner.fit(pairs, label)
+        X_transformed = learner.transform(X)
+        tsne = TSNE(n_components=2)
+        X_tsne_transformed = tsne.fit_transform(X_transformed)
+
+        # Plot the transformed data
+        ax_transformed_data.set_title("The transformed data")
+        ax_transformed_data.scatter(X_tsne_transformed[:, 0], X_tsne_transformed[:, 1], c=y, cmap=colormap)
+
+        # Plot the result of Kmeans
+        km = KMeans(n_clusters=len(set(y)))
+        km.fit(X_transformed)
+        kmeans_labels = km.labels_.astype(np.int32)
+        ax_transformed_clustered.set_title(
+            f"Result of Kmeans on the transformed data, with ari: {metrics.adjusted_rand_score(kmeans_labels, y)}")
+        ax_transformed_clustered.scatter(X_tsne_transformed[:, 0], X_tsne_transformed[:, 1], c=kmeans_labels, cmap=colormap)
+
     else:
-        raise Exception("should never happen")
+        fig.suptitle("comparison of Kmeans on the normal and transformed data")
 
-    indices = [*range(X.shape[0])]
-    pairs, label = convert_cl_ml_to_pairs(indices, cl, ml)
-    print(pairs)
-    print(label)
-    learner.fit(pairs, label)
-    X_transformed = learner.transform(X_data)
+        # Plot the normal data
+        ax_normal_data.set_title("The normal data, with the constraints")
+        ax_normal_data.scatter(X[:, 0], X[:, 1], c=y, cmap=colormap)
+        plot_lines(ax_normal_data, X, cl, "r")
+        plot_lines(ax_normal_data, X, ml, "g")
 
-    # Plot the transformed data
-    ax_transformed_data.set_title("The transformed data")
-    ax_transformed_data.scatter(X_transformed[:, 0], X_transformed[:, 1], c=y, cmap=colormap)
+        # Plot the result of Kmeans
+        km = KMeans(n_clusters=len(set(y)))
+        km.fit(X)
+        kmeans_labels = km.labels_.astype(np.int32)
+        ax_normal_clustered.set_title(f"Result of Kmeans, with ari: {metrics.adjusted_rand_score(kmeans_labels, y)}")
+        ax_normal_clustered.scatter(X[:, 0], X[:, 1], c=kmeans_labels, cmap=colormap)
 
-    # Plot the result of Kmeans
-    km = KMeans(n_clusters=len(set(y)))
-    km.fit(X_transformed)
-    kmeans_labels = km.labels_.astype(np.int32)
-    ax_transformed_clustered.set_title(f"Result of Kmeans on the transformed data, with ari: {metrics.adjusted_rand_score(kmeans_labels, y)}")
-    ax_transformed_clustered.scatter(X_transformed[:, 0], X_transformed[:, 1], c=kmeans_labels, cmap=colormap)
+        if transformer == "ITML":
+            learner = metric_learn.ITML(preprocessor=X, prior="random")
+        elif transformer == "MMC":
+            print(X)
+            learner = metric_learn.MMC(preprocessor=X, init="identity", diagonal=True)
+        else:
+            raise Exception("should never happen")
+
+        indices = [*range(X.shape[0])]
+        pairs, label = convert_cl_ml_to_pairs(indices, cl, ml)
+        print(pairs)
+        print(label)
+        learner.fit(pairs, label)
+        X_transformed = learner.transform(X)
+
+        # Plot the transformed data
+        ax_transformed_data.set_title("The transformed data")
+        ax_transformed_data.scatter(X_transformed[:, 0], X_transformed[:, 1], c=y, cmap=colormap)
+
+        # Plot the result of Kmeans
+        km = KMeans(n_clusters=len(set(y)))
+        km.fit(X_transformed)
+        kmeans_labels = km.labels_.astype(np.int32)
+        ax_transformed_clustered.set_title(
+            f"Result of Kmeans on the transformed data, with ari: {metrics.adjusted_rand_score(kmeans_labels, y)}")
+        ax_transformed_clustered.scatter(X_transformed[:, 0], X_transformed[:, 1], c=kmeans_labels, cmap=colormap)
 
     plt.show()
 
@@ -95,9 +140,8 @@ def generate_2d_dataset(dataset_type: str):
         X, y = make_circles(n_samples=100, noise=0.05)
     elif dataset_type == "classification":
         X, y = make_classification(n_samples=100, n_classes=3, n_clusters_per_class=2,
-                                   n_informative=3, class_sep=4., n_features=5,
-                                   n_redundant=0, shuffle=True,
-                                   scale=[1, 1, 20, 20, 20])
+                                   n_informative=3, class_sep=4., n_features=10,
+                                   n_redundant=0, shuffle=True)
         # print(X)
         # print(y)
     else:
@@ -180,15 +224,15 @@ def create_constraints(y):
 
 def main():
     # metric_learner = metric_learn.MMC()
-    # dataset_types = ["moon", "blob", "circle", "classification"]
-    dataset_types = ["moon"]
+    dataset_types = ["moon", "blob", "circle", "classification"]
+    dataset_types = ["classification"]
     for t in dataset_types:
         # np.random.seed(42)
         X, y = generate_2d_dataset(t)
         indices = [*range(X.shape[0])]
 
         cl, ml = generate_random_cl_ml(indices, y, 20)
-        plot_set_and_its_clustering(X, y, cl, ml, "MMC")
+        plot_set_and_its_clustering(X, y, cl, ml, "ITML")
 
         print(f"{t}, info: #instances: {len(y)}, #classes: {len(set(y))}, #features: {X.shape[1]}")
 
