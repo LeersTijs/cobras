@@ -71,7 +71,7 @@ def test_budgets():
 
 def test_normal(name: str, seed_number: int, info: dict, budget: int, amount_of_runs: int):
     data, labels = get_data_set(name)
-    np.random.seed(seed_number)
+    # np.random.seed(seed_number)
 
     runs = {}
     max_queries_asked = 0

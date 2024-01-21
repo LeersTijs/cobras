@@ -80,7 +80,8 @@ def plot_set_and_its_clustering(X, y, cl: list[tuple], ml: list[tuple], transfor
         kmeans_labels = km.labels_.astype(np.int32)
         ax_transformed_clustered.set_title(
             f"Result of Kmeans on the transformed data, with ari: {metrics.adjusted_rand_score(kmeans_labels, y)}")
-        ax_transformed_clustered.scatter(X_tsne_transformed[:, 0], X_tsne_transformed[:, 1], c=kmeans_labels, cmap=colormap)
+        ax_transformed_clustered.scatter(X_tsne_transformed[:, 0], X_tsne_transformed[:, 1], c=kmeans_labels,
+                                         cmap=colormap)
 
     else:
         fig.suptitle("comparison of Kmeans on the normal and transformed data")
@@ -133,17 +134,39 @@ def generate_2d_dataset(dataset_type: str):
     dataset_type = "blob", "moon", "circle", "classification"
     """
     if dataset_type == "blob":
-        X, y = make_blobs(n_samples=100, centers=3, n_features=2, cluster_std=2)
+        X, y = make_blobs(n_samples=200, centers=3, n_features=2, cluster_std=2)
     elif dataset_type == "moon":
-        X, y = make_moons(n_samples=100, noise=0.1)
+        X, y = make_moons(n_samples=200, noise=0.1)
     elif dataset_type == "circle":
-        X, y = make_circles(n_samples=100, noise=0.05)
+        X, y = make_circles(n_samples=200, noise=0.05)
     elif dataset_type == "classification":
-        X, y = make_classification(n_samples=100, n_classes=3, n_clusters_per_class=2,
+        X, y = make_classification(n_samples=200, n_classes=3, n_clusters_per_class=2,
                                    n_informative=3, class_sep=4., n_features=10,
                                    n_redundant=0, shuffle=True)
-        # print(X)
-        # print(y)
+    elif dataset_type == "combination":
+        n = 75
+        X_blob, y_blob = make_blobs(n_samples=n, centers=2, n_features=2, cluster_std=0.7, center_box=(-5, 5))
+        # X_blob[:, 0] = X_blob[:, 0]
+
+        X_moon, y_moon = make_moons(n_samples=n, noise=0.07)
+
+        X_moon[:, 1] *= 3
+        X_moon[:, 0] *= 1.25
+
+        X_moon[:, 1] = X_moon[:, 1] - np.full(n, 1)
+        X_moon[:, 0] = X_moon[:, 0] + np.full(n, 2)
+
+        X_circle, y_circle = make_circles(n_samples=n, noise=0.1)
+
+        X_circle[y_circle == 0] = 1.5 * X_circle[y_circle == 0]
+        X_circle[y_circle == 1] = 0.75 * X_circle[y_circle == 1]
+
+        X_circle[:, 1] = X_circle[:, 1] - np.full(n, 1)
+        X_circle[:, 0] = X_circle[:, 0] - np.full(n, 2)
+
+        X = np.concatenate((X_blob, X_moon, X_circle), axis=0)
+        y = np.concatenate((y_blob, y_moon + np.full(n, 2), y_circle + np.full(n, 4)))
+        return X, y
     else:
         raise Exception(f"the given dataset_type ({dataset_type}) is not implemented")
     return X, y
@@ -223,19 +246,26 @@ def create_constraints(y):
 
 
 def main():
+    np.random.seed(31)
+
     # metric_learner = metric_learn.MMC()
-    dataset_types = ["moon", "blob", "circle", "classification"]
-    dataset_types = ["classification"]
+    dataset_types = ["moon", "blob", "circle", "classification", "combination"]
+    dataset_types = ["combination"]
     for t in dataset_types:
         # np.random.seed(42)
         X, y = generate_2d_dataset(t)
         indices = [*range(X.shape[0])]
 
-        cl, ml = generate_random_cl_ml(indices, y, 20)
+        cl, ml = generate_random_cl_ml(indices, y, 30)
         plot_set_and_its_clustering(X, y, cl, ml, "ITML")
 
         print(f"{t}, info: #instances: {len(y)}, #classes: {len(set(y))}, #features: {X.shape[1]}")
 
 
+def f():
+    generate_2d_dataset("combination")
+
+
 if __name__ == "__main__":
     main()
+    # f()

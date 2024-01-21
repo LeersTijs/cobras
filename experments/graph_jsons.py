@@ -179,7 +179,7 @@ def graph_dataset(dataset: str, result: dict, info: dict):
 
 def graph_testing_metric_learning():
     names = ["iris", "ionosphere", "glass", "yeast", "wine"]
-    # names = ["iris"]
+    # names = ["iris", "wine"]
     info = {
         "normal": None,
         "MMC": {
@@ -196,7 +196,7 @@ def graph_testing_metric_learning():
     # path = "testing_metric_learning_full_budget/everything.json"
     # path = "testing_trans_min_queries_20/everything.json"
     # path = "testing_metric_learning/everything.json"
-    path = "testing_transformation_full_budget/everything.json"
+    path = "testing_incremental_learner_partial/everything.json"
     with open(path) as f:
         all_data = json.load(f)
 
