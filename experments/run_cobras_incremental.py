@@ -151,13 +151,13 @@ def main():
 
 def run_cobras_incremental():
     np.random.seed(31)
-    name = "iris"
+    name = "yeast"
     budget = 150
     init, diag = "random", True
     prior = "random"
 
-    # data, labels = get_data_set(name)
-    data, labels = generate_2d_dataset("combination")
+    data, labels = get_data_set(name)
+    # data, labels = generate_2d_dataset("combination")
 
     start_time = time.time()
     clusterer = COBRAS_kmeans(data, LabelQuerier(labels), max_questions=budget)
@@ -183,35 +183,7 @@ def run_cobras_incremental():
           f"amount of queries asked: {len(ml) + len(cl)}")
 
 
-def test_initial_number_of_clusters():
-    names = ["iris", "ionosphere", "glass", "yeast", "wine"]
-    budget = 150
-
-    for name in names:
-        data, labels = get_data_set(name)
-
-        print(f"########### Running: {name} #ofclasses: {len(set(labels))} ###########")
-        start_time = time.time()
-
-        clusterer = COBRAS_kmeans(data, LabelQuerier(labels), max_questions=budget)
-        clustering, intermediate_clustering, runtimes, ml, cl = clusterer.cluster()
-
-        end_time = time.time()
-
-        number_of_clusters = list(map(lambda intermediate_labeling: len(set(intermediate_labeling)), intermediate_clustering))
-
-        clustering_labeling = clustering.construct_cluster_labeling()
-        ari = metrics.adjusted_rand_score(clustering_labeling, labels)
-        t = end_time - start_time
-        print(number_of_clusters)
-        print(f"Budget: {budget}, "
-              f"ARI: {ari}, "
-              f"#Clusters: {len(set(clustering_labeling))} "
-              f"time: {t}, "
-              f"# queries asked: {len(ml) + len(cl)}\n")
-
-
 if __name__ == "__main__":
-    # run_cobras_incremental()
+    run_cobras_incremental()
     # main()
-    test_initial_number_of_clusters()
+    # test_initial_number_of_clusters()

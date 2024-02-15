@@ -196,7 +196,7 @@ def graph_testing_metric_learning():
     # path = "testing_metric_learning_full_budget/everything.json"
     # path = "testing_trans_min_queries_20/everything.json"
     # path = "testing_metric_learning/everything.json"
-    path = "testing_incremental_learner_partial/everything.json"
+    path = "this_is_only_for_testing/everything.json"
     with open(path) as f:
         all_data = json.load(f)
 

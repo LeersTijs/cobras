@@ -9,7 +9,7 @@ from cobras_ts.cluster import Cluster
 from cobras_ts.clustering import Clustering
 
 
-class  COBRAS(abc.ABC):
+class COBRAS(abc.ABC):
     def __init__(self, data, querier, max_questions, train_indices=None, store_intermediate_results=True):
         """
         COBRAS clustering
@@ -99,6 +99,8 @@ class  COBRAS(abc.ABC):
             clustering_to_store = None
             if self.intermediate_results:
                 clustering_to_store = self.clustering.construct_cluster_labeling()
+
+            k = len(self.clustering.clusters)
 
             # remove the super-instance to split from the cluster that contains it
             originating_cluster.super_instances.remove(to_split)
@@ -319,8 +321,9 @@ class  COBRAS(abc.ABC):
 
         # if self.store_intermediate_results and not starting_level:
         if fully_merged and self.store_intermediate_results:
-            self.intermediate_results[-1] = (self.clustering.construct_cluster_labeling(), time.time() - self.start_time,
-                                             len(self.ml) + len(self.cl))
+            self.intermediate_results[-1] = (
+                self.clustering.construct_cluster_labeling(), time.time() - self.start_time,
+                len(self.ml) + len(self.cl))
         return fully_merged
 
     def identify_superinstance_to_split(self):
