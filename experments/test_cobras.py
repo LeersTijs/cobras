@@ -222,15 +222,16 @@ def test_incremental(name: str, info: list[tuple], budget: int, n: int, seed=-1)
 
 def test_incr_budget(name: str, info: list[tuple], budget: int, n: int, seed=-1):
     result = {}
-    min_number_of_questions = 70
+    min_number_of_questions = 25
 
     for metric_learner_name, parameters_to_test in info:
-        print(metric_learner_name, parameters_to_test)
+        # print(metric_learner_name, parameters_to_test)
         result[metric_learner_name] = {}
 
         keys = []
 
         for hyper_parameters in parameters_to_test:
+            print(f"Learner: {metric_learner_name} with: {hyper_parameters.values()}")
             print(metric_learner_name, hyper_parameters)
 
             if seed != -1:
@@ -505,12 +506,12 @@ def main():
           ])]
 
     all_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
-    test_sets = ["iris", "wine"]
-    # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
+    # test_sets = ["iris", "wine"]
+    test_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
 
     path = "testing_incr_budget"  # No "/" at the end
-    seed = -1
-    test_cobras(test_sets, tests, path, 150, 1, seed)
+    seed = 31
+    test_cobras(test_sets, tests, path, 150, 2, seed)
     put_tests_in_one_json(path, test_sets)
     graph_normal_vs_experiment("incr_budget", path, True)
 

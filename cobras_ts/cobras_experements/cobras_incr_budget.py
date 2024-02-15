@@ -20,7 +20,6 @@ class COBRAS_incr_budget(COBRAS_kmeans):
                          max_questions=max_questions,
                          train_indices=train_indices,
                          store_intermediate_results=store_intermediate_results)
-        self.query_counter = 0
         self.splitting_algo = splitting_algo
         self.min_number_of_questions = min_number_of_questions
         self.debug = debug
@@ -54,28 +53,13 @@ class COBRAS_incr_budget(COBRAS_kmeans):
 
         # the split level for this initial super-instance is determined,
         # the super-instance is split, and a new cluster is created for each of the newly created super-instances
-        self.query_counter = 0
         initial_k = self.determine_split_level(initial_superinstance,
                                                copy.deepcopy(self.clustering.construct_cluster_labeling()))
-
-        if self.debug:
-            print("##############################################")
-            something = self.splitting_algo["algo"]
-            print(f"initial_k: {initial_k}, splitting_algo: {something}, "
-                  f"amount_of_constraints: {len(self.ml) + len(self.cl)}, "
-                  f"budget: {self.min_number_of_questions}")
-
         # split the super-instance and place each new super-instance in its own cluster
+
         if (not self.splitting_algo["algo"] == "") and (len(self.ml) + len(self.cl) >= self.min_number_of_questions):
-
-            if self.debug:
-                print(f"splitting using cl and ml")
-
             superinstances = self.split_superinstance_using_cl_ml(initial_superinstance, initial_k)
         else:
-
-            if self.debug:
-                print(f"normal splitting")
             superinstances = self.split_superinstance(initial_superinstance, initial_k)
 
         self.clustering.clusters = []
@@ -117,33 +101,20 @@ class COBRAS_incr_budget(COBRAS_kmeans):
 
             # - splitting phase -
             # determine the splitlevel
-            self.query_counter = 0
             split_level = self.determine_split_level(to_split, clustering_to_store)
-
-            if self.debug:
-                print(f"split_level: {split_level}, #ofConstraints: {len(self.ml) + len(self.cl)},"
-                      f" SI_to_split (centroid): {to_split.centroid}, budget: {self.min_number_of_questions}")
-
             # split the chosen super-instance
+
             if (not self.splitting_algo["algo"] == "") and (
                     len(self.ml) + len(self.cl) >= self.min_number_of_questions):
-
-                if self.debug:
-                    print(f"splitting using cl and ml")
-
-                new_super_instances = self.split_superinstance_using_cl_ml(initial_superinstance, initial_k)
+                new_super_instances = self.split_superinstance_using_cl_ml(to_split, split_level)
             else:
+                new_super_instances = self.split_superinstance(to_split, split_level)
 
-                if self.debug:
-                    print(f"normal splitting")
-
-                new_super_instances = self.split_superinstance(initial_superinstance, initial_k)
+            # new_super_instances = self.split_superinstance(to_split, split_level)
 
             # add the new super-instances to the clustering (each in their own cluster)
             new_clusters = self.add_new_clusters_from_split(new_super_instances)
             if not new_clusters:
-                if self.debug:
-                    print("I am here :)")
                 # it is possible that splitting a super-instance does not lead to a new cluster:
                 # e.g. a super-instance constains 2 points, of which one is in the test set
                 # in this case, the super-instance can be split into two new ones, but these will be joined
@@ -172,9 +143,6 @@ class COBRAS_incr_budget(COBRAS_kmeans):
         # clustering procedure is finished
         # change the clustering result to the last valid clustering
         self.clustering = last_valid_clustering
-
-        if self.debug:
-            print(f"The end, amount_of_constraints: {len(self.ml) + len(self.cl)}")
 
         # return the correct result based on what self.store_intermediate_results contains
         if self.store_intermediate_results:

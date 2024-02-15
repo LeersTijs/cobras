@@ -93,14 +93,13 @@ class COBRAS(abc.ABC):
             # choose the next super-instance to split
             to_split, originating_cluster = self.identify_superinstance_to_split()
             if to_split is None:
+
                 break
 
             # clustering to store keeps the last valid clustering
             clustering_to_store = None
             if self.intermediate_results:
                 clustering_to_store = self.clustering.construct_cluster_labeling()
-
-            k = len(self.clustering.clusters)
 
             # remove the super-instance to split from the cluster that contains it
             originating_cluster.super_instances.remove(to_split)
