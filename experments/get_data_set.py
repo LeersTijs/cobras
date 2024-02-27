@@ -20,6 +20,18 @@ def ionosphere(label):
             return 1
 
 
+def ecoli(label):
+    a = {"cp": 0,
+         "im": 1,
+         "pp": 2,
+         "imU": 3,
+         "om": 4,
+         "omL": 5,
+         "imL": 6,
+         "imS": 7}
+    return a[label]
+
+
 def map_yeast_to_matrix(raw):
     data = []
     labels = []
@@ -92,6 +104,32 @@ def get_data_set(name: str):
             data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
             labels = np.loadtxt(path, delimiter=',', usecols=[0]).astype(np.int32)
 
+        case "dermatology":
+            path += "dermatology/dermatology.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(0, 33))
+            labels = np.loadtxt(path, delimiter=',', usecols=[34]).astype(np.int32)
+        case "ecoli":
+            path += "ecoli/ecoli.data"
+            data = np.loadtxt(path, usecols=range(1, 8))
+            labels = np.genfromtxt(path, dtype=str, usecols=[8])
+            labels = list(map(ecoli, labels))
+        case "hepatitis":
+            path += "hepatitis/hepatitis.data"
+            raise Exception("hepatitis has alot of missing values that I do not feel like dealing with. :)")
+
+        case "spambase":
+            path += "spambase/spambase.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(0, 57))
+            labels = np.loadtxt(path, delimiter=',', usecols=[57])
+
+        case "breast":
+            path += "breast+cancer+wisconsin+original/breast-cancer-wisconsin.data"
+            data = np.loadtxt(path, delimiter=',', usecols=[1, 2, 3, 4, 5, 7, 8, 9])
+            labels = np.loadtxt(path, delimiter=',', usecols=[10])
+
+        case _:
+            raise Exception(f"the dataset: {name} is not available")
+
     return data, labels
 
 
@@ -103,16 +141,17 @@ def get_data_summery(name: str, data, labels):
 
 def main():
     # names = ["iris", "yeast"]
-    names = ["iris", "wine", "ionosphere", "glass", "yeast", "test"]
+    # names = ["iris", "wine", "ionosphere", "glass", "yeast", "dermatology"]
+    names = ["iris", "wine", "ionosphere", "glass", "yeast", "dermatology", "ecoli", "spambase", "breast", "dermatology"]
     # names = ["wine_normal"]
     # names = ["wine", "normal_wine", "normal_wine_ax0"]
     for name in names:
         data, labels = get_data_set(name)
         print(get_data_summery(name, data, labels))
-        print(type(labels))
-        print(type(data))
-        print(data[0])
-        print(labels[0])
+        # print(type(labels))
+        # print(type(data))
+        # print(data[0])
+        # print(labels[0])
         print()
 
 

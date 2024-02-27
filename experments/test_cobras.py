@@ -18,6 +18,7 @@ from cobras_ts.querier import LabelQuerier
 from experments.get_data_set import get_data_set
 
 simplefilter(action='ignore', category=FutureWarning)
+simplefilter(action='ignore', category=UserWarning)
 
 
 # simplefilter(action='ignore', category=RuntimeWarning)
@@ -102,18 +103,21 @@ def test_normal(name: str, info: list[tuple], budget: int, n: int, seed=-1):
         end_time = time.time()
 
         aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
+        nmis = list(map(lambda x: metrics.normalized_mutual_info_score(x, labels), intermediate_clustering))
 
         clustering_labeling = clustering.construct_cluster_labeling()
         ari = metrics.adjusted_rand_score(clustering_labeling, labels)
+        nmi = metrics.normalized_mutual_info_score(clustering_labeling, labels)
         t = end_time - start_time
         queries = len(ml) + len(cl)
         print(f"Budget: {budget}, "
               f"ARI: {ari}, "
+              f"NMI: {nmi}, "
               f"time: {t}, "
               f"amount of queries asked: {queries}")
         if queries > max_queries_asked:
             max_queries_asked = queries
-        runs[index] = {"#queries": queries, "ari": aris, "time": runtimes}
+        runs[index] = {"#queries": queries, "ari": aris, "nmi": nmis, "time": runtimes}
 
     aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
 
@@ -320,7 +324,7 @@ def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget:
 
 
 def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool):
-    colors = ["b", "g", "r", "c", "m", "y", "k"]
+    colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
     i = 0
     lines = []
 
@@ -500,21 +504,26 @@ def main():
     tests = [
         ("normal", None),
         # ("smart", None),
-        ("incr_budget",
-         [("mmc", mmc_hyper_parameters),
-          ("itml", itml_hyper_parameters)
-          ])]
+        # ("incr_budget",
+        #  [("mmc", mmc_hyper_parameters),
+        #   ("itml", itml_hyper_parameters)
+        #   ])
+    ]
 
     all_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
     # test_sets = ["iris", "wine"]
-    test_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
+    # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
+    # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
+    test_sets = ["yeast"]
 
-    path = "testing_incr_budget"  # No "/" at the end
-    seed = 31
-    test_cobras(test_sets, tests, path, 150, 2, seed)
-    put_tests_in_one_json(path, test_sets)
-    graph_normal_vs_experiment("incr_budget", path, True)
+    path = ""  # No "/" at the end
+    seed = -1
+    test_cobras(test_sets, tests, path, 150, 3, seed)
+    # put_tests_in_one_json(path, test_sets)
+    # graph_normal_vs_experiment("incr_budget", path, True)
 
 
 if __name__ == "__main__":
     main()
+    # ari = metrics.adjusted_rand_score([1, 1, 1, 0, 0, 2, 0, 1], [2, 2, 2, 1, 1, 0, 1, 2])
+    # print(ari)

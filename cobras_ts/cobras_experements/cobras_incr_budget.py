@@ -58,6 +58,7 @@ class COBRAS_incr_budget(COBRAS_kmeans):
         # split the super-instance and place each new super-instance in its own cluster
 
         if (not self.splitting_algo["algo"] == "") and (len(self.ml) + len(self.cl) >= self.min_number_of_questions):
+            # print(f"We are using metric learning, current_amount_of_constrains: {len(self.ml) + len(self.cl)}")
             superinstances = self.split_superinstance_using_cl_ml(initial_superinstance, initial_k)
         else:
             superinstances = self.split_superinstance(initial_superinstance, initial_k)
@@ -106,8 +107,10 @@ class COBRAS_incr_budget(COBRAS_kmeans):
 
             if (not self.splitting_algo["algo"] == "") and (
                     len(self.ml) + len(self.cl) >= self.min_number_of_questions):
+                # print(f"We are using metric learning, current_amount_of_constrains: {len(self.ml) + len(self.cl)}")
                 new_super_instances = self.split_superinstance_using_cl_ml(to_split, split_level)
             else:
+                # print(f"normal, current_amount_of_constrains: {len(self.cl) + len(self.ml)}")
                 new_super_instances = self.split_superinstance(to_split, split_level)
 
             # new_super_instances = self.split_superinstance(to_split, split_level)
