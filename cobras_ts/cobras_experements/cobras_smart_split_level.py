@@ -1,5 +1,8 @@
 import copy
 import time
+import decimal
+
+import numpy as np
 
 from cobras_ts.cluster import Cluster
 from cobras_ts.clustering import Clustering
@@ -7,6 +10,11 @@ from cobras_ts.cobras_kmeans import COBRAS_kmeans
 
 
 class COBRAS_smart_split_level(COBRAS_kmeans):
+
+    def __init__(self, data, querier, max_questions, ground_truth_k=-1):
+
+        super().__init__(data, querier, max_questions)
+        self.ground_truth_k = ground_truth_k
 
     def cluster(self):
         self.start_time = time.time()
@@ -22,8 +30,23 @@ class COBRAS_smart_split_level(COBRAS_kmeans):
 
         # the split level for this initial super-instance is determined,
         # the super-instance is split, and a new cluster is created for each of the newly created super-instances
+
+        # initial_k = self.ground_truth_k if not self.ground_truth_k == -1 else (
+        #     self.determine_split_level(initial_superinstance,
+        #                                copy.deepcopy(self.clustering.construct_cluster_labeling())))
+        # print(initial_k, self.ground_truth_k)
+        decimal.getcontext().rounding = decimal.ROUND_HALF_UP
         initial_k = self.determine_split_level(initial_superinstance,
-                                               copy.deepcopy(self.clustering.construct_cluster_labeling()))
+                                                   copy.deepcopy(self.clustering.construct_cluster_labeling()))
+        if not self.ground_truth_k == -1:
+            print(f"k: {self.ground_truth_k}, initial_k: {initial_k}")
+            initial_k = int(decimal.Decimal(np.average([self.ground_truth_k, initial_k])).to_integral_value())
+            # initial_k = max([self.ground_truth_k, initial_k])
+            print(int(initial_k))
+        # else:
+        #     initial_k = self.determine_split_level(initial_superinstance,
+        #                                            copy.deepcopy(self.clustering.construct_cluster_labeling()))
+
         # split the super-instance and place each new super-instance in its own cluster
         superinstances = self.split_superinstance(initial_superinstance, initial_k)
         self.clustering.clusters = []
@@ -35,7 +58,7 @@ class COBRAS_smart_split_level(COBRAS_kmeans):
         self.merge_containing_clusters(copy.deepcopy(self.clustering.construct_cluster_labeling()))
         last_valid_clustering = copy.deepcopy(self.clustering)
 
-        split_level_list = [{"split_level": initial_k, "k": len(self.clustering.clusters), "#q": len(self.ml) + len(self.cl)}]
+        # split_level_list = [{"split_level": initial_k, "k": len(self.clustering.clusters), "#q": len(self.ml) + len(self.cl)}]
         # print(f"initial_k: {initial_k}, #clusters: {len(self.clustering.clusters)}")
 
         # while we have not reached the max number of questions
@@ -60,7 +83,7 @@ class COBRAS_smart_split_level(COBRAS_kmeans):
             if self.intermediate_results:
                 clustering_to_store = self.clustering.construct_cluster_labeling()
 
-            k = len(self.clustering.clusters)
+            # k = len(self.clustering.clusters)
 
             # remove the super-instance to split from the cluster that contains it
             originating_cluster.super_instances.remove(to_split)
@@ -69,12 +92,20 @@ class COBRAS_smart_split_level(COBRAS_kmeans):
 
             # - splitting phase -
             # determine the splitlevel
+            # max_split = len(to_split.indices)
+            # split_level = min([self.ground_truth_k, max_split]) if not self.ground_truth_k == -1 else (
+            #                     self.determine_split_level(to_split, clustering_to_store))
+            # print(f"max: {max_split}, k: {self.ground_truth_k}, split_level: {split_level}")
+
+            # split_level = self.ground_truth_k if not self.ground_truth_k == -1 else self.determine_split_level(to_split, clustering_to_store)
+            # print(split_level, self.ground_truth_k)
             split_level = self.determine_split_level(to_split, clustering_to_store)
 
-            split_level_list.append({"split_level": split_level, "k": k, "#q": len(self.ml) + len(self.cl)})
-            if split_level > (k * 3) and k != 1:
-                print(f"It happened, split_level: {split_level}, k: {k}, k*3: {k * 3},  #q: {len(self.ml) + len(self.cl)}")
-                split_level = k * 3
+            if not self.ground_truth_k == -1:
+                # print(f"k: {self.ground_truth_k}, split_level: {split_level}")
+                split_level = int(decimal.Decimal(np.average([self.ground_truth_k, split_level])).to_integral_value())
+                # split_level = max([self.ground_truth_k, split_level])
+                # print(split_level)
 
             # split the chosen super-instance
             new_super_instances = self.split_superinstance(to_split, split_level)
@@ -114,7 +145,7 @@ class COBRAS_smart_split_level(COBRAS_kmeans):
         # return the correct result based on what self.store_intermediate_results contains
         if self.store_intermediate_results:
             return (self.clustering, [clust for clust, _, _ in self.intermediate_results], [runtime for _, runtime, _ in
-                                                                                           self.intermediate_results],
-                    self.ml, self.cl, split_level_list)
+                                                                                            self.intermediate_results],
+                    self.ml, self.cl)
         else:
             return self.clustering

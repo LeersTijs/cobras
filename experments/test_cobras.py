@@ -103,21 +103,21 @@ def test_normal(name: str, info: list[tuple], budget: int, n: int, seed=-1):
         end_time = time.time()
 
         aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
-        nmis = list(map(lambda x: metrics.normalized_mutual_info_score(x, labels), intermediate_clustering))
+        # nmis = list(map(lambda x: metrics.normalized_mutual_info_score(x, labels), intermediate_clustering))
 
         clustering_labeling = clustering.construct_cluster_labeling()
         ari = metrics.adjusted_rand_score(clustering_labeling, labels)
-        nmi = metrics.normalized_mutual_info_score(clustering_labeling, labels)
+        # nmi = metrics.normalized_mutual_info_score(clustering_labeling, labels)
         t = end_time - start_time
         queries = len(ml) + len(cl)
         print(f"Budget: {budget}, "
               f"ARI: {ari}, "
-              f"NMI: {nmi}, "
+              # f"NMI: {nmi}, "
               f"time: {t}, "
               f"amount of queries asked: {queries}")
         if queries > max_queries_asked:
             max_queries_asked = queries
-        runs[index] = {"#queries": queries, "ari": aris, "nmi": nmis, "time": runtimes}
+        runs[index] = {"#queries": queries, "ari": aris, "time": runtimes}
 
     aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
 
@@ -133,11 +133,12 @@ def test_smart(name: str, info: list[tuple], budget: int, n: int, seed=-1):
 
     for index in range(n):
         data, labels = get_data_set(name)
+        k = len(set(labels))
 
         start_time = time.time()
         clusterer = COBRAS_smart_split_level(data, LabelQuerier(labels),
-                                             max_questions=budget)
-        clustering, intermediate_clustering, runtimes, ml, cl, split_levels = clusterer.cluster()
+                                             max_questions=budget, ground_truth_k=k)
+        clustering, intermediate_clustering, runtimes, ml, cl = clusterer.cluster()
         end_time = time.time()
 
         aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
@@ -323,53 +324,59 @@ def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget:
             f.write(json_object)
 
 
-def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool):
-    colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
-    i = 0
-    lines = []
+def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, split_in_multiple_graphs=1):
+    split_lists = np.array_split(data_sets, split_in_multiple_graphs)
+    # print(split_lists)
 
-    for dataset in data_sets:
-        data = all_data[dataset]
-        normal_data = data["normal"]
-        other_data = data[other]
+    for datasets in split_lists:
+        print(f"current datasets: {datasets}")
+        colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
+        i = 0
+        lines = []
 
-        normal_budget = [*range(normal_data["#queries"])]
-        plt.plot(normal_budget, normal_data["ari"], color=colors[i])
+        for dataset in datasets:
+            print(dataset)
+            data = all_data[dataset]
+            normal_data = data["normal"]
+            other_data = data[other]
+
+            normal_budget = [*range(normal_data["#queries"])]
+            plt.plot(normal_budget, normal_data["ari"], color=colors[i])
+
+            if uses_metric_learner:
+                # mmc and itml are in it
+                mmc = other_data["mmc"]
+                itml = other_data["itml"]
+                mmc_budget = [*range(mmc["#queries"])]
+                itml_budget = [*range(itml["#queries"])]
+
+                plt.plot(mmc_budget, mmc["ari"], color=colors[i], linestyle="--")
+                plt.plot(itml_budget, itml["ari"], color=colors[i], linestyle=":")
+            else:
+                # same as normal
+                other_budget = [*range(other_data["#queries"])]
+                plt.plot(other_budget, other_data["ari"], color=colors[i], linestyle="--")
+
+            lines.append(Line2D([0, 1], [0, 1], linestyle="-", color=colors[i]))
+            i += 1
+
+        names = copy(list(datasets))
+
+        names.append("COBRAS")
+        lines.append(Line2D([0, 1], [0, 1], linestyle="-", color="k"))
 
         if uses_metric_learner:
-            # mmc and itml are in it
-            mmc = other_data["mmc"]
-            itml = other_data["itml"]
-            mmc_budget = [*range(mmc["#queries"])]
-            itml_budget = [*range(itml["#queries"])]
+            names.append(f"{other}+mmc")
+            lines.append(Line2D([0, 1], [0, 1], linestyle="--", color="k"))
 
-            plt.plot(mmc_budget, mmc["ari"], color=colors[i], linestyle="--")
-            plt.plot(itml_budget, itml["ari"], color=colors[i], linestyle=":")
+            names.append(f"{other}+itml")
+            lines.append(Line2D([0, 1], [0, 1], linestyle=":", color="k"))
         else:
-            # same as normal
-            other_budget = [*range(other_data["#queries"])]
-            plt.plot(other_budget, other_data["ari"], color=colors[i], linestyle="--")
+            names.append(other)
+            lines.append(Line2D([0, 1], [0, 1], linestyle="--", color="k"))
 
-        lines.append(Line2D([0, 1], [0, 1], linestyle="-", color=colors[i]))
-        i += 1
-
-    names = copy(data_sets)
-
-    names.append("COBRAS")
-    lines.append(Line2D([0, 1], [0, 1], linestyle="-", color="k"))
-
-    if uses_metric_learner:
-        names.append(f"{other}+mmc")
-        lines.append(Line2D([0, 1], [0, 1], linestyle="--", color="k"))
-
-        names.append(f"{other}+itml")
-        lines.append(Line2D([0, 1], [0, 1], linestyle=":", color="k"))
-    else:
-        names.append(other)
-        lines.append(Line2D([0, 1], [0, 1], linestyle="--", color="k"))
-
-    plt.legend(lines, names)
-    plt.show()
+        plt.legend(lines, names, loc=4)
+        plt.show()
 
 
 def graph_dataset(other: str, dataset: str, data: dict):
@@ -468,7 +475,8 @@ def graph_normal_vs_experiment(other: str, path: str, uses_metric_learner: bool)
     data_sets = list(all_data.keys())
     print(data_sets)
 
-    graph_every_dataset(other, all_data, data_sets, uses_metric_learner)
+    graph_every_dataset(other, all_data, data_sets, uses_metric_learner,
+                        split_in_multiple_graphs=1 if uses_metric_learner else 1)
 
     if uses_metric_learner:
         for dataset in data_sets:
@@ -503,7 +511,7 @@ def main():
 
     tests = [
         ("normal", None),
-        # ("smart", None),
+        ("smart", None),
         # ("incr_budget",
         #  [("mmc", mmc_hyper_parameters),
         #   ("itml", itml_hyper_parameters)
@@ -513,14 +521,14 @@ def main():
     all_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
     # test_sets = ["iris", "wine"]
     # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
-    # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
-    test_sets = ["yeast"]
+    test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
+    # test_sets = ["yeast"]
 
-    path = ""  # No "/" at the end
-    seed = -1
-    test_cobras(test_sets, tests, path, 150, 3, seed)
-    # put_tests_in_one_json(path, test_sets)
-    # graph_normal_vs_experiment("incr_budget", path, True)
+    path = "testing_smart_split_level/each_iteration_split_level_and_ground_k_avg"  # No "/" at the end
+    seed = 31
+    test_cobras(test_sets, tests, path, 150, 5, seed)
+    put_tests_in_one_json(path, test_sets)
+    graph_normal_vs_experiment("smart", path, False)
 
 
 if __name__ == "__main__":
