@@ -35,14 +35,15 @@ class COBRAS_smart_split_level(COBRAS_kmeans):
         #     self.determine_split_level(initial_superinstance,
         #                                copy.deepcopy(self.clustering.construct_cluster_labeling())))
         # print(initial_k, self.ground_truth_k)
-        decimal.getcontext().rounding = decimal.ROUND_HALF_UP
+        # decimal.getcontext().rounding = decimal.ROUND_HALF_UP
         initial_k = self.determine_split_level(initial_superinstance,
                                                    copy.deepcopy(self.clustering.construct_cluster_labeling()))
-        if not self.ground_truth_k == -1:
-            print(f"k: {self.ground_truth_k}, initial_k: {initial_k}")
-            initial_k = int(decimal.Decimal(np.average([self.ground_truth_k, initial_k])).to_integral_value())
-            # initial_k = max([self.ground_truth_k, initial_k])
-            print(int(initial_k))
+        initial_k *= 2
+        # if not self.ground_truth_k == -1:
+        #     print(f"k: {self.ground_truth_k}, initial_k: {initial_k}")
+        #     initial_k = int(decimal.Decimal(np.average([self.ground_truth_k, initial_k])).to_integral_value())
+        #     # initial_k = max([self.ground_truth_k, initial_k])
+        #     print(int(initial_k))
         # else:
         #     initial_k = self.determine_split_level(initial_superinstance,
         #                                            copy.deepcopy(self.clustering.construct_cluster_labeling()))
@@ -100,12 +101,14 @@ class COBRAS_smart_split_level(COBRAS_kmeans):
             # split_level = self.ground_truth_k if not self.ground_truth_k == -1 else self.determine_split_level(to_split, clustering_to_store)
             # print(split_level, self.ground_truth_k)
             split_level = self.determine_split_level(to_split, clustering_to_store)
+            split_level *= 2
+            split_level = min([len(to_split.indices), split_level])
 
-            if not self.ground_truth_k == -1:
-                # print(f"k: {self.ground_truth_k}, split_level: {split_level}")
-                split_level = int(decimal.Decimal(np.average([self.ground_truth_k, split_level])).to_integral_value())
-                # split_level = max([self.ground_truth_k, split_level])
-                # print(split_level)
+            # if not self.ground_truth_k == -1:
+            #     # print(f"k: {self.ground_truth_k}, split_level: {split_level}")
+            #     split_level = int(decimal.Decimal(np.average([self.ground_truth_k, split_level])).to_integral_value())
+            #     # split_level = max([self.ground_truth_k, split_level])
+            #     # print(split_level)
 
             # split the chosen super-instance
             new_super_instances = self.split_superinstance(to_split, split_level)

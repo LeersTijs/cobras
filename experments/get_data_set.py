@@ -71,36 +71,36 @@ def get_data_set(name: str):
     data, labels = [], []
     match name:
         case "iris":
-            path += "Iris/iris.data"
+            path += "iris/iris.data"
             data = np.loadtxt(path, delimiter=',', usecols=[0, 1, 2, 3])
             labels = np.genfromtxt(path, delimiter=',', dtype=str, usecols=[4])
             labels = list(map(iris, labels))
         case "wine":
-            path += "Wine/wine.data"
+            path += "wine/wine.data"
             data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
             labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[0])
         case "ionosphere":
-            path += "Ionosphere/ionosphere.data"
+            path += "ionosphere/ionosphere.data"
             data = np.loadtxt(path, delimiter=",", usecols=range(0, 34))
             labels = np.genfromtxt(path, delimiter=",", dtype=str, usecols=[34])
             labels = list(map(ionosphere, labels))
         case "glass":
-            path += "Glass/glass.data"
+            path += "glass/glass.data"
             data = np.loadtxt(path, delimiter=',', usecols=range(1, 10))
             labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[10])
         case "yeast":
-            path += "Yeast/yeast.data"
+            path += "yeast/yeast.data"
             data, labels = map_yeast_to_matrix(np.genfromtxt(path, delimiter=',', dtype=str))
         case "test":
-            path += "Test/test.data"
+            path += "test/test.data"
             data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
             labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[0])
         case "normal_wine":
-            path += "Normalized_wine/normal_wine.data"
+            path += "normalized_wine/normal_wine.data"
             data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
             labels = np.loadtxt(path, delimiter=',', usecols=[0]).astype(np.int32)
         case "normal_wine_ax0":
-            path += "Normalized_wine_ax0/normal_wine_ax0.data"
+            path += "normalized_wine_ax0/normal_wine_ax0.data"
             data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
             labels = np.loadtxt(path, delimiter=',', usecols=[0]).astype(np.int32)
 
@@ -138,20 +138,109 @@ def get_data_summery(name: str, data, labels):
     classes = len(set(labels))
     return "name: {}, #instances: {}, #dimensions: {}, #classes: {}".format(name, len(data), dim, classes)
 
+def get_norm_data_set(name: str):
+    name = name.lower()
+    path = "D:/School/2023-2024/thesis/dataSets/"
+    data, labels = [], []
+    match name:
+        case "iris":
+            path += "iris/norm.data"
+            data = np.loadtxt(path, delimiter=',', usecols=[0, 1, 2, 3])
+            labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[4])
+        case "wine":
+            path += "wine/norm.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(0, 13))
+            labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[13])
+        case "ionosphere":
+            path += "ionosphere/norm.data"
+            data = np.loadtxt(path, delimiter=",", usecols=range(0, 34))
+            labels = np.loadtxt(path, delimiter=",", dtype=int, usecols=[34])
+        case "glass":
+            path += "glass/norm.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(0, 9))
+            labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[9])
+        case "yeast":
+            path += "yeast/norm.data"
+            # data, labels = map_yeast_to_matrix(np.genfromtxt(path, delimiter=',', dtype=str))
+            data = np.loadtxt(path, delimiter=',', usecols=range(0, 8))
+            labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[8])
+
+        case "test":
+            path += "test/norm.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
+            labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[0])
+        case "normal_wine":
+            path += "normalized_wine/norm.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
+            labels = np.loadtxt(path, delimiter=',', usecols=[0]).astype(np.int32)
+        case "normal_wine_ax0":
+            path += "normalized_wine_ax0/norm.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(1, 14))
+            labels = np.loadtxt(path, delimiter=',', usecols=[0]).astype(np.int32)
+
+        case "dermatology":
+            path += "dermatology/norm.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(0, 33))
+            labels = np.loadtxt(path, delimiter=',', usecols=[33]).astype(np.int32)
+        case "ecoli":
+            path += "ecoli/norm.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(0, 7))
+            labels = np.loadtxt(path,  delimiter=',', dtype=int, usecols=[7])
+        case "hepatitis":
+            path += "hepatitis/norm.data"
+            raise Exception("hepatitis has alot of missing values that I do not feel like dealing with. :)")
+
+        case "spambase":
+            path += "spambase/norm.data"
+            data = np.loadtxt(path, delimiter=',', usecols=range(0, 57))
+            labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[57])
+
+        case "breast":
+            path += "breast+cancer+wisconsin+original/norm.data"
+            data = np.loadtxt(path, delimiter=',', usecols=[0, 1, 2, 3, 4, 5, 7, 8])
+            labels = np.loadtxt(path, delimiter=',', usecols=[8])
+
+        case _:
+            raise Exception(f"the dataset: {name} is not available")
+
+    return data, labels
+
+
+def normalize_datasets():
+    names = ["iris", "wine", "ionosphere", "glass", "yeast", "ecoli", "spambase", "breast", "dermatology"]
+
+    path_to_datasets = "D:/School/2023-2024/thesis/dataSets/"
+    for name in names:
+        print(f"------ Normalizing {name} ------")
+        data, labels = get_data_set(name)
+
+        normalized_data = preprocessing.MinMaxScaler().fit_transform(data)
+        print(f"OG: {data[0]}, norm: {normalized_data[0]}")
+
+        print(data.shape[1])
+        fmt = ['%10.10f' for _ in range(data.shape[1])] + ['%d']
+
+        added_labels = np.column_stack((normalized_data, labels))
+
+        correct_name = name if not name == "breast" else "breast+cancer+wisconsin+original"
+        np.savetxt(fname=path_to_datasets + f"{correct_name}/norm.data", X=added_labels, fmt=fmt, delimiter=',')
+
 
 def main():
     # names = ["iris", "yeast"]
     # names = ["iris", "wine", "ionosphere", "glass", "yeast", "dermatology"]
-    names = ["iris", "wine", "ionosphere", "glass", "yeast", "dermatology", "ecoli", "spambase", "breast", "dermatology"]
+    names = ["iris", "wine", "ionosphere", "glass", "yeast", "ecoli", "spambase", "breast", "dermatology"]
     # names = ["wine_normal"]
     # names = ["wine", "normal_wine", "normal_wine_ax0"]
     for name in names:
-        data, labels = get_data_set(name)
-        print(get_data_summery(name, data, labels))
+        data, labels = get_norm_data_set(name)
+        # print(get_data_summery(name, data, labels))
+        # print(name)
         # print(type(labels))
         # print(type(data))
-        # print(data[0])
-        # print(labels[0])
+        print(get_data_summery(name, data, labels))
+        print(data[0])
+        print(labels[0])
         print()
 
 
@@ -159,6 +248,7 @@ if __name__ == "__main__":
     # saving_norm_wine_data_ax0()
     # saving_norm_wine_data()
     main()
+    # normalize_datasets()
     # path = "D:/School/2023-2024/thesis/dataSets/Yeast/yeast.data"
     # data = np.genfromtxt(path, delimiter=',', dtype=str)
     # print(data)

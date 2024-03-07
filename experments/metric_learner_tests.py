@@ -129,26 +129,41 @@ def plot_set_and_its_clustering(X, y, cl: list[tuple], ml: list[tuple], transfor
     plt.show()
 
 
-def generate_2d_dataset(dataset_type: str):
+def generate_2d_dataset(dataset_type: str, seed=-1):
     """
     dataset_type = "blob", "moon", "circle", "classification"
     """
+    if seed != -1:
+        np.random.seed(seed)
+
     if dataset_type == "blob":
         X, y = make_blobs(n_samples=200, centers=3, n_features=2, cluster_std=2)
+
     elif dataset_type == "moon":
         X, y = make_moons(n_samples=200, noise=0.1)
+
     elif dataset_type == "circle":
-        X, y = make_circles(n_samples=200, noise=0.05)
+        X_circle, y_circle = make_circles(n_samples=200, noise=0.1)
+
+        X_circle[y_circle == 0] = 1.5 * X_circle[y_circle == 0]
+        X_circle[y_circle == 1] = 0.5 * X_circle[y_circle == 1]
+
+        X_circle[:, 1] = X_circle[:, 1] - np.full(200, 1)
+        X_circle[:, 0] = X_circle[:, 0] - np.full(200, 2)
+
+        X, y = X_circle, y_circle
+
     elif dataset_type == "classification":
         X, y = make_classification(n_samples=200, n_classes=3, n_clusters_per_class=2,
                                    n_informative=3, class_sep=4., n_features=10,
                                    n_redundant=0, shuffle=True)
     elif dataset_type == "combination":
-        n = 75
-        X_blob, y_blob = make_blobs(n_samples=n, centers=2, n_features=2, cluster_std=0.7, center_box=(-5, 5))
-        # X_blob[:, 0] = X_blob[:, 0]
 
-        X_moon, y_moon = make_moons(n_samples=n, noise=0.07)
+        n = 75
+        X_blob, y_blob = make_blobs(n_samples=n, centers=2, n_features=2, cluster_std=0.5, center_box=(-2, 2))
+        X_blob[:, 1] += 3
+
+        X_moon, y_moon = make_moons(n_samples=n, noise=0.05)
 
         X_moon[:, 1] *= 3
         X_moon[:, 0] *= 1.25
@@ -159,14 +174,14 @@ def generate_2d_dataset(dataset_type: str):
         X_circle, y_circle = make_circles(n_samples=n, noise=0.1)
 
         X_circle[y_circle == 0] = 1.5 * X_circle[y_circle == 0]
-        X_circle[y_circle == 1] = 0.75 * X_circle[y_circle == 1]
+        X_circle[y_circle == 1] = 0.5 * X_circle[y_circle == 1]
 
         X_circle[:, 1] = X_circle[:, 1] - np.full(n, 1)
         X_circle[:, 0] = X_circle[:, 0] - np.full(n, 2)
 
         X = np.concatenate((X_blob, X_moon, X_circle), axis=0)
         y = np.concatenate((y_blob, y_moon + np.full(n, 2), y_circle + np.full(n, 4)))
-        return X, y
+
     else:
         raise Exception(f"the given dataset_type ({dataset_type}) is not implemented")
     return X, y
