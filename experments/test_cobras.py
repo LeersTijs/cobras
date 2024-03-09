@@ -327,6 +327,7 @@ def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget:
 def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, split_in_multiple_graphs=1):
     split_lists = np.array_split(data_sets, split_in_multiple_graphs)
     # print(split_lists)
+    split_lists = [["wine"]]
 
     for datasets in split_lists:
         print(f"current datasets: {datasets}")
@@ -511,7 +512,8 @@ def main():
 
     tests = [
         ("normal", None),
-        ("smart", None),
+        # ("smart", None),
+        ("mini_merge", None)
         # ("incr_budget",
         #  [("mmc", mmc_hyper_parameters),
         #   ("itml", itml_hyper_parameters)
@@ -524,11 +526,22 @@ def main():
     test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
     # test_sets = ["yeast"]
 
-    path = "testing_smart_split_level/each_iteration_split_level_and_ground_k_avg"  # No "/" at the end
-    seed = 31
-    test_cobras(test_sets, tests, path, 150, 5, seed)
-    put_tests_in_one_json(path, test_sets)
-    graph_normal_vs_experiment("smart", path, False)
+    # paths = ["testing_smart_split_level/only_ground_k",
+    #          "testing_smart_split_level/each_iteration_only_using_ground_k",
+    #          "testing_smart_split_level/using_k_only_in_a_iteration",
+    #          "testing_smart_split_level/each_iteration_split_level_and_ground_k_avg",
+    #          "testing_smart_split_level/each_iteration_split_level_and_ground_k_min",
+    #          "testing_smart_split_level/each_iteration_split_level_and_ground_k_max"]
+
+    paths = ["mini_merge"]
+    for p in paths:
+        # path = "testing_smart_split_level/only_ground_k"  # No "/" at the end
+        seed = 31
+        test_cobras(test_sets, tests, p, 150, 3, seed)
+        put_tests_in_one_json(p, test_sets)
+        print(p)
+        graph_normal_vs_experiment("smart", p, False)
+        print()
 
 
 if __name__ == "__main__":
