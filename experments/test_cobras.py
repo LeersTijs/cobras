@@ -12,10 +12,11 @@ from sklearn import metrics
 
 from cobras_ts.cobras_experements.cobras_incr_budget import COBRAS_incr_budget
 from cobras_ts.cobras_experements.cobras_incremental import COBRAS_incremental
+from cobras_ts.cobras_experements.cobras_mini_merge import COBRAS_mini_merge
 from cobras_ts.cobras_experements.cobras_smart_split_level import COBRAS_smart_split_level
 from cobras_ts.cobras_kmeans import COBRAS_kmeans
 from cobras_ts.querier import LabelQuerier
-from experments.get_data_set import get_data_set
+from experments.get_data_set import get_norm_data_set
 
 simplefilter(action='ignore', category=FutureWarning)
 simplefilter(action='ignore', category=UserWarning)
@@ -94,7 +95,7 @@ def test_normal(name: str, info: list[tuple], budget: int, n: int, seed=-1):
     max_queries_asked = 0
 
     for index in range(n):
-        data, labels = get_data_set(name)
+        data, labels = get_norm_data_set(name)
 
         start_time = time.time()
         clusterer = COBRAS_kmeans(data, LabelQuerier(labels),
@@ -132,7 +133,7 @@ def test_smart(name: str, info: list[tuple], budget: int, n: int, seed=-1):
     max_queries_asked = 0
 
     for index in range(n):
-        data, labels = get_data_set(name)
+        data, labels = get_norm_data_set(name)
         k = len(set(labels))
 
         start_time = time.time()
@@ -182,7 +183,7 @@ def test_incremental(name: str, info: list[tuple], budget: int, n: int, seed=-1)
 
             for index in range(n):
                 try:
-                    data, labels = get_data_set(name)
+                    data, labels = get_norm_data_set(name)
 
                     start_time = time.time()
                     clusterer = COBRAS_incremental(data, LabelQuerier(labels),
@@ -225,6 +226,50 @@ def test_incremental(name: str, info: list[tuple], budget: int, n: int, seed=-1)
     return result
 
 
+def test_mini_merge(name: str, info: list[tuple], budget: int, n: int, seed=-1):
+    if seed != -1:
+        np.random.seed(seed)
+
+    mini_merge_n = info[0][1]
+    print(f"mini_merge_n = {mini_merge_n}")
+
+    runs = {}
+    max_queries_asked = 0
+
+    for index in range(n):
+        retry = True
+        while retry:
+            retry = False
+            try:
+                data, labels = get_norm_data_set(name)
+
+                start_time = time.time()
+                clusterer = COBRAS_mini_merge(data, LabelQuerier(labels),
+                                              max_questions=budget, verbose=False, n=mini_merge_n)
+                clustering, intermediate_clustering, runtimes, ml, cl = clusterer.cluster()
+                end_time = time.time()
+
+                aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
+                clustering_labeling = clustering.construct_cluster_labeling()
+                ari = metrics.adjusted_rand_score(clustering_labeling, labels)
+                t = end_time - start_time
+                queries = len(ml) + len(cl)
+                print(f"Budget: {budget}, "
+                      f"ARI: {ari}, "
+                      f"time: {t}, "
+                      f"amount of queries asked: {queries}")
+                if queries > max_queries_asked:
+                    max_queries_asked = queries
+                runs[index] = {"#queries": queries, "ari": aris, "time": runtimes}
+            except ValueError:
+                retry = True
+
+
+    aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
+
+    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs}
+
+
 def test_incr_budget(name: str, info: list[tuple], budget: int, n: int, seed=-1):
     result = {}
     min_number_of_questions = 25
@@ -247,7 +292,7 @@ def test_incr_budget(name: str, info: list[tuple], budget: int, n: int, seed=-1)
 
             for index in range(n):
                 try:
-                    data, labels = get_data_set(name)
+                    data, labels = get_norm_data_set(name)
 
                     start_time = time.time()
                     clusterer = COBRAS_incr_budget(data, LabelQuerier(labels),
@@ -312,6 +357,9 @@ def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget:
                 case "incr_budget":
                     incr_budget = test_incr_budget(name, info, max_budget, n, seed)
                     dataset_result["incr_budget"] = incr_budget
+                case "mini_merge":
+                    mini_merge = test_mini_merge(name, info, max_budget, n, seed)
+                    dataset_result["mini_merge"] = mini_merge
                 case _:
                     raise ValueError("The given algo is not implemented")
             print()
@@ -325,9 +373,10 @@ def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget:
 
 
 def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, split_in_multiple_graphs=1):
+    print(split_in_multiple_graphs)
     split_lists = np.array_split(data_sets, split_in_multiple_graphs)
     # print(split_lists)
-    split_lists = [["wine"]]
+    # split_lists = [["wine"]]
 
     for datasets in split_lists:
         print(f"current datasets: {datasets}")
@@ -477,7 +526,7 @@ def graph_normal_vs_experiment(other: str, path: str, uses_metric_learner: bool)
     print(data_sets)
 
     graph_every_dataset(other, all_data, data_sets, uses_metric_learner,
-                        split_in_multiple_graphs=1 if uses_metric_learner else 1)
+                        split_in_multiple_graphs=1 if uses_metric_learner else 2)
 
     if uses_metric_learner:
         for dataset in data_sets:
@@ -513,7 +562,7 @@ def main():
     tests = [
         ("normal", None),
         # ("smart", None),
-        ("mini_merge", None)
+        ("mini_merge", [("", 2)])
         # ("incr_budget",
         #  [("mmc", mmc_hyper_parameters),
         #   ("itml", itml_hyper_parameters)
@@ -524,6 +573,11 @@ def main():
     # test_sets = ["iris", "wine"]
     # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
     test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
+    test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
+
+    # Desisty based datasets:
+    # Iris, Cure, Chameleon (see C-DBSCAN paper)
+
     # test_sets = ["yeast"]
 
     # paths = ["testing_smart_split_level/only_ground_k",
@@ -533,14 +587,14 @@ def main():
     #          "testing_smart_split_level/each_iteration_split_level_and_ground_k_min",
     #          "testing_smart_split_level/each_iteration_split_level_and_ground_k_max"]
 
-    paths = ["mini_merge"]
+    paths = ["mini_merge_testing/norm/everywhere_2"]
     for p in paths:
         # path = "testing_smart_split_level/only_ground_k"  # No "/" at the end
         seed = 31
         test_cobras(test_sets, tests, p, 150, 3, seed)
         put_tests_in_one_json(p, test_sets)
         print(p)
-        graph_normal_vs_experiment("smart", p, False)
+        graph_normal_vs_experiment("mini_merge", p, False)
         print()
 
 

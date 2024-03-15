@@ -160,7 +160,7 @@ def generate_2d_dataset(dataset_type: str, seed=-1):
     elif dataset_type == "combination":
 
         n = 75
-        X_blob, y_blob = make_blobs(n_samples=n, centers=2, n_features=2, cluster_std=0.5, center_box=(-2, 2))
+        X_blob, y_blob = make_blobs(n_samples=n, centers=[(-3, 2), (3, 2)], n_features=2, cluster_std=0.5)
         X_blob[:, 1] += 3
 
         X_moon, y_moon = make_moons(n_samples=n, noise=0.05)

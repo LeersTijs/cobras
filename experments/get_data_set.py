@@ -138,6 +138,7 @@ def get_data_summery(name: str, data, labels):
     classes = len(set(labels))
     return "name: {}, #instances: {}, #dimensions: {}, #classes: {}".format(name, len(data), dim, classes)
 
+
 def get_norm_data_set(name: str):
     name = name.lower()
     path = "D:/School/2023-2024/thesis/dataSets/"
@@ -185,7 +186,7 @@ def get_norm_data_set(name: str):
         case "ecoli":
             path += "ecoli/norm.data"
             data = np.loadtxt(path, delimiter=',', usecols=range(0, 7))
-            labels = np.loadtxt(path,  delimiter=',', dtype=int, usecols=[7])
+            labels = np.loadtxt(path, delimiter=',', dtype=int, usecols=[7])
         case "hepatitis":
             path += "hepatitis/norm.data"
             raise Exception("hepatitis has alot of missing values that I do not feel like dealing with. :)")
