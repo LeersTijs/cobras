@@ -145,7 +145,8 @@ def main():
     # np.random.seed(31)
 
     dataset_types = ["moon", "blob", "circle", "classification", "combination"]
-    dataset_types = ["circle", "combination", "combination", "blob", "circle", "moon"]
+    # dataset_types = ["circle", "combination", "combination", "blob", "circle", "moon"]
+    dataset_types = ["moon", "moon", "moon", "moon"]
 
     algos = ["CMS", "PCKMeans", "MPCKMeans", "Over_cluster_kmeans"]
     algo = "Over_cluster_kmeans"

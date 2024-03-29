@@ -48,9 +48,10 @@ class SuperInstance_kmeans(SuperInstance):
             var_dist = 0
             med_dist = -1
             label_distribution = np.zeros(len(set(ground_truth_labels)))
-            label_distribution[ground_truth_labels[self.indices[0]]] = 1
+            label_distribution[ground_truth_labels[self.indices[0]] - 1] = 1
             ent = 0
             clv = 0
+            k = 1
         else:
             number_of_labels = len(set(ground_truth_labels))
 
@@ -59,6 +60,7 @@ class SuperInstance_kmeans(SuperInstance):
             for (idx1, idx2) in instance_pairs:
                 dist = np.linalg.norm(self.data[idx1] - self.data[idx2])
                 dist_distribution.append(dist)
+
             max_dist = max(dist_distribution)
             avg_dist = np.average(dist_distribution)
             var_dist = np.var(dist_distribution)
@@ -76,6 +78,8 @@ class SuperInstance_kmeans(SuperInstance):
                 if idx1 in self.indices and idx2 in self.indices:
                     clv += 1
 
+            k = np.count_nonzero(label_distribution)
+
         round_dec = 5
         si_info = {
             "size": size,
@@ -86,6 +90,7 @@ class SuperInstance_kmeans(SuperInstance):
             "med_dist": round(med_dist, round_dec),
             "clv": clv,
             "label_distribution": list(map(lambda x: int(x), label_distribution)),
-            "label_entropy": round(ent, round_dec)
+            "label_entropy": round(ent, round_dec),
+            "k": k
         }
         return si_info

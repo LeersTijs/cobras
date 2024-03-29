@@ -12,11 +12,13 @@ from sklearn import metrics
 
 from cobras_ts.cobras_experements.cobras_incr_budget import COBRAS_incr_budget
 from cobras_ts.cobras_experements.cobras_incremental import COBRAS_incremental
+from cobras_ts.cobras_experements.cobras_inspect import COBRAS_inspect
 from cobras_ts.cobras_experements.cobras_mini_merge import COBRAS_mini_merge
 from cobras_ts.cobras_experements.cobras_smart_split_level import COBRAS_smart_split_level
 from cobras_ts.cobras_kmeans import COBRAS_kmeans
 from cobras_ts.querier import LabelQuerier
 from experments.get_data_set import get_norm_data_set
+from experments.metric_learner_tests import generate_2d_dataset
 
 simplefilter(action='ignore', category=FutureWarning)
 simplefilter(action='ignore', category=UserWarning)
@@ -93,6 +95,7 @@ def test_normal(name: str, info: list[tuple], budget: int, n: int, seed=-1):
 
     runs = {}
     max_queries_asked = 0
+    tot_clv = [0] * (budget + 1)
 
     for index in range(n):
         data, labels = get_norm_data_set(name)
@@ -100,8 +103,12 @@ def test_normal(name: str, info: list[tuple], budget: int, n: int, seed=-1):
         start_time = time.time()
         clusterer = COBRAS_kmeans(data, LabelQuerier(labels),
                                   max_questions=budget)
-        clustering, intermediate_clustering, runtimes, ml, cl = clusterer.cluster()
+        clustering, intermediate_clustering, runtimes, ml, cl, clv = clusterer.cluster()
         end_time = time.time()
+
+        print(clv)
+        for (b, v) in clv:
+            tot_clv[b] += v
 
         aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
         # nmis = list(map(lambda x: metrics.normalized_mutual_info_score(x, labels), intermediate_clustering))
@@ -118,11 +125,18 @@ def test_normal(name: str, info: list[tuple], budget: int, n: int, seed=-1):
               f"amount of queries asked: {queries}")
         if queries > max_queries_asked:
             max_queries_asked = queries
-        runs[index] = {"#queries": queries, "ari": aris, "time": runtimes}
+        runs[index] = {"#queries": queries, "ari": aris, "time": runtimes, "clv": clv}
 
     aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
 
-    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs}
+    print(tot_clv)
+    tot_clv = np.array(tot_clv, dtype=np.float64)
+    tot_clv /= n
+    # tot_clv = tot_clv.astype(np.int32)
+    tot_clv = tot_clv.tolist()
+    print(tot_clv)
+
+    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs, "clv": tot_clv}
 
 
 def test_smart(name: str, info: list[tuple], budget: int, n: int, seed=-1):
@@ -241,11 +255,12 @@ def test_mini_merge(name: str, info: list[tuple], budget: int, n: int, seed=-1):
         while retry:
             retry = False
             try:
-                data, labels = get_norm_data_set(name)
+                # data, labels = get_norm_data_set(name)
+                data, labels = generate_2d_dataset(name, seed)
 
                 start_time = time.time()
                 clusterer = COBRAS_mini_merge(data, LabelQuerier(labels),
-                                              max_questions=budget, verbose=False, n=mini_merge_n)
+                                              max_questions=budget, verbose=True, n=mini_merge_n)
                 clustering, intermediate_clustering, runtimes, ml, cl = clusterer.cluster()
                 end_time = time.time()
 
@@ -263,7 +278,6 @@ def test_mini_merge(name: str, info: list[tuple], budget: int, n: int, seed=-1):
                 runs[index] = {"#queries": queries, "ari": aris, "time": runtimes}
             except ValueError:
                 retry = True
-
 
     aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
 
@@ -337,7 +351,95 @@ def test_incr_budget(name: str, info: list[tuple], budget: int, n: int, seed=-1)
     return result
 
 
+def convert_labels(labels):
+    result = np.array(labels, dtype=int)
+    label_names = set(result)
+
+    def make_smaller(x, c, diff):
+        if x >= c:
+            return x - diff
+        else:
+            return x
+
+    if 0 not in label_names:
+        min_val = min(label_names)
+        result = list(map(lambda x: x - min_val, labels))
+        label_names = set(result)
+
+    if max(label_names) != len(label_names) - 1:
+        current_element = 0
+        label_names.remove(current_element)
+
+        while len(label_names) > 0:
+            if current_element == min(label_names) + 1:
+                current_element = min(label_names)
+                label_names.remove(current_element)
+            else:
+                diff = min(label_names) - current_element - 1
+                current_element = min(label_names)
+                result = list(map(lambda x: make_smaller(x, current_element, diff), result))
+                label_names = list(set(result))
+                current_element -= diff
+                label_names = set(list(filter(lambda x: x > current_element, label_names)))
+
+    return np.array(result, dtype=int)
+
+
+def test_inspect(name: str, info: list[tuple], budget: int, n: int, seed=-1):
+    if seed != -1:
+        np.random.seed(seed)
+
+    runs = {}
+    max_queries_asked = 0
+
+    sum_counter = {"size": 0, "max_dist": 0, "avg_dist": 0, "med_dist": 0, "var_dist": 0, "nothing": 0, "total": 0}
+
+    for index in range(n):
+        data, labels = get_norm_data_set(name)
+        labels = convert_labels(labels)
+
+        start_time = time.time()
+        clusterer = COBRAS_inspect(data, LabelQuerier(labels),
+                                   max_questions=budget, verbose=False, ground_truth_labels=labels, ground_split_level=True)
+        clustering, intermediate_clustering, runtimes, ml, cl, counter, ig = clusterer.cluster()
+        end_time = time.time()
+
+        aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
+        clustering_labeling = clustering.construct_cluster_labeling()
+        ari = metrics.adjusted_rand_score(clustering_labeling, labels)
+        t = end_time - start_time
+        queries = len(ml) + len(cl)
+        print(f"Budget: {budget}, "
+              f"ARI: {ari}, "
+              f"time: {t}, "
+              f"amount of queries asked: {queries}")
+        if queries > max_queries_asked:
+            max_queries_asked = queries
+        runs[index] = {"#queries": queries, "ari": aris, "time": runtimes}
+
+        for key in counter.keys():
+            sum_counter[key] += counter[key]
+
+    aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
+
+    print(sum_counter)
+    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs, "counter": sum_counter}
+
+
+def avg_counting(counting: dict) -> dict:
+    if "total" not in counting.keys():
+        print("fuck you")
+
+    resulting_dict = {}
+    for key in counting.keys():
+        if key != "total":
+            resulting_dict[key] = counting[key] / counting["total"]
+    return resulting_dict
+
+
 def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget: int, n: int, seed=-1):
+    total_counter = {"size": 0, "max_dist": 0, "avg_dist": 0, "med_dist": 0, "var_dist": 0, "nothing": 0, "total": 0}
+
     for name in data_sets:
         print(f"############### Using: {name} ###############")
         dataset_result = {}
@@ -360,9 +462,19 @@ def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget:
                 case "mini_merge":
                     mini_merge = test_mini_merge(name, info, max_budget, n, seed)
                     dataset_result["mini_merge"] = mini_merge
+                case "inspect":
+                    inspect = test_inspect(name, info, max_budget, n, seed)
+                    dataset_result["inspect"] = inspect
+
+                    for key in inspect["counter"].keys():
+                        total_counter[key] += inspect["counter"][key]
                 case _:
                     raise ValueError("The given algo is not implemented")
             print()
+
+        if not total_counter["total"] == 0:
+            print(total_counter)
+            print(avg_counting(total_counter))
 
         json_object = json.dumps(dataset_result, indent=2)
         json_object = re.sub(r'": \[\s+', '": [', json_object)
@@ -526,7 +638,7 @@ def graph_normal_vs_experiment(other: str, path: str, uses_metric_learner: bool)
     print(data_sets)
 
     graph_every_dataset(other, all_data, data_sets, uses_metric_learner,
-                        split_in_multiple_graphs=1 if uses_metric_learner else 2)
+                        split_in_multiple_graphs=1 if uses_metric_learner else 1)
 
     if uses_metric_learner:
         for dataset in data_sets:
@@ -534,16 +646,19 @@ def graph_normal_vs_experiment(other: str, path: str, uses_metric_learner: bool)
 
     return
 
+def graph_clv(path):
+    with open(path + "/everything.json") as f:
+        all_data = json.load(f)
+
+    data_sets = list(all_data.keys())
+    print(data_sets)
+
+    for dataset in data_sets:
+        plt.plot(all_data[dataset]["normal"]["clv"], label=dataset)
+    plt.legend()
+    plt.show()
 
 def main():
-    # tests = [
-    #     ("normal", None),
-    #     ("smart", None),
-    #     ("incremental",
-    #      [
-    #          ("mmc", {}), ("itml", {})
-    #      ])
-    # ]
     mmc_hyper_parameters = [
         {"algo": "MMC", "diagonal": False, "init": "identity"},
         {"algo": "MMC", "diagonal": False, "init": "covariance"},
@@ -562,24 +677,18 @@ def main():
     tests = [
         ("normal", None),
         # ("smart", None),
-        ("mini_merge", [("", 2)])
+        ("inspect", None)
+        # ("mini_merge", [("", 2)])
         # ("incr_budget",
         #  [("mmc", mmc_hyper_parameters),
         #   ("itml", itml_hyper_parameters)
         #   ])
     ]
 
-    all_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
-    # test_sets = ["iris", "wine"]
-    # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
     test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
-    test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
+    test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "breast", "dermatology"]
 
-    # Desisty based datasets:
-    # Iris, Cure, Chameleon (see C-DBSCAN paper)
-
-    # test_sets = ["yeast"]
-
+    # test_sets = ["circle", "combination", "combination", "blob", "circle", "moon"]
     # paths = ["testing_smart_split_level/only_ground_k",
     #          "testing_smart_split_level/each_iteration_only_using_ground_k",
     #          "testing_smart_split_level/using_k_only_in_a_iteration",
@@ -587,18 +696,17 @@ def main():
     #          "testing_smart_split_level/each_iteration_split_level_and_ground_k_min",
     #          "testing_smart_split_level/each_iteration_split_level_and_ground_k_max"]
 
-    paths = ["mini_merge_testing/norm/everywhere_2"]
+    paths = ["testing_smart_split_level/using_ground_labeling_to_determenate_k"]
     for p in paths:
         # path = "testing_smart_split_level/only_ground_k"  # No "/" at the end
         seed = 31
-        test_cobras(test_sets, tests, p, 150, 3, seed)
+        test_cobras(test_sets, tests, p, 150, 5, seed)
         put_tests_in_one_json(p, test_sets)
-        print(p)
-        graph_normal_vs_experiment("mini_merge", p, False)
+        # print(p)
+        # graph_clv(p)
+        graph_normal_vs_experiment("inspect", p, False)
         print()
 
 
 if __name__ == "__main__":
     main()
-    # ari = metrics.adjusted_rand_score([1, 1, 1, 0, 0, 2, 0, 1], [2, 2, 2, 1, 1, 0, 1, 2])
-    # print(ari)

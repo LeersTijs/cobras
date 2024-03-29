@@ -39,6 +39,7 @@ class COBRAS(abc.ABC):
         self.intermediate_results = []
         self.ml = None
         self.cl = None
+        self.clv = []
 
     def cluster(self):
         """Perform clustering
@@ -72,6 +73,19 @@ class COBRAS(abc.ABC):
         self.clustering.clusters = []
         for si in superinstances:
             self.clustering.clusters.append(Cluster([si]))
+
+        clv = 0
+        for cluster in self.clustering.clusters:
+            for si in cluster.super_instances:
+                for (x, y) in self.cl:
+                    if x in si.indices and y in si.indices:
+                        clv += 1
+                for (x, y) in self.ml:
+                    if x in si.indices and (y not in si.indices):
+                        clv += 1
+                    if (x not in si.indices) and y in si.indices:
+                        clv += 1
+        self.clv.append((len(self.cl) + len(self.ml), clv))
 
         # the first bottom up merging step
         # the resulting cluster is the best clustering we have so use this as first valid clustering
@@ -133,12 +147,28 @@ class COBRAS(abc.ABC):
             else:
                 self.clustering.clusters.extend(new_clusters)
 
+            clv = 0
+            for cluster in self.clustering.clusters:
+                for si in cluster.super_instances:
+                    for (x, y) in self.cl:
+                        if x in si.indices and y in si.indices:
+                            clv += 1
+            self.clv.append((len(self.cl) + len(self.ml), clv))
+
             # perform the merging phase
             fully_merged = self.merge_containing_clusters(clustering_to_store)
             # if the merging phase was able to complete before the query limit was reached
             # the current clustering is a valid clustering
             if fully_merged:
                 last_valid_clustering = copy.deepcopy(self.clustering)
+
+            clv = 0
+            for cluster in self.clustering.clusters:
+                for si in cluster.super_instances:
+                    for (x, y) in self.cl:
+                        if x in si.indices and y in si.indices:
+                            clv += 1
+            self.clv.append((len(self.cl) + len(self.ml), clv))
 
         # clustering procedure is finished
         # change the clustering result to the last valid clustering
@@ -147,7 +177,7 @@ class COBRAS(abc.ABC):
         # return the correct result based on what self.store_intermediate_results contains
         if self.store_intermediate_results:
             return self.clustering, [clust for clust, _, _ in self.intermediate_results], [runtime for _, runtime, _ in
-                                                                                           self.intermediate_results], self.ml, self.cl
+                                                                                           self.intermediate_results], self.ml, self.cl, self.clv
         else:
             return self.clustering
 

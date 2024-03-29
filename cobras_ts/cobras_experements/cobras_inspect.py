@@ -1,18 +1,19 @@
 import copy
 import time
 
+import numpy as np
+from prettytable import PrettyTable
+from sklearn import metrics
+
 from cobras_ts.cluster import Cluster
 from cobras_ts.clustering import Clustering
 from cobras_ts.cobras_kmeans import COBRAS_kmeans
-
-from prettytable import PrettyTable
-
 from cobras_ts.superinstance_kmeans import SuperInstance_kmeans
 
 
 class COBRAS_inspect(COBRAS_kmeans):
 
-    def __init__(self, data, querier, max_questions, ground_truth_labels: list[int], verbose=True):
+    def __init__(self, data, querier, max_questions, ground_truth_labels: list[int], verbose=True, ground_split_level=False):
         super().__init__(data, querier, max_questions)
 
         if len(ground_truth_labels) != len(data):
@@ -20,6 +21,16 @@ class COBRAS_inspect(COBRAS_kmeans):
 
         self.ground_truth_labels = ground_truth_labels
         self.verbose = verbose
+        self.ground_split_level = ground_split_level
+
+        self.counter = {"size": 0,
+                        "max_dist": 0,
+                        "avg_dist": 0,
+                        "med_dist": 0,
+                        "var_dist": 0,
+                        "nothing": 0,
+                        "total": 0}
+        self.information_gain = []
 
     def cluster(self):
         """Perform clustering
@@ -46,8 +57,12 @@ class COBRAS_inspect(COBRAS_kmeans):
 
         # the split level for this initial super-instance is determined,
         # the super-instance is split, and a new cluster is created for each of the newly created super-instances
-        initial_k = self.determine_split_level(initial_superinstance,
-                                               copy.deepcopy(self.clustering.construct_cluster_labeling()))
+        if self.ground_split_level:
+            initial_k = initial_superinstance.get_information(self.ground_truth_labels, self.cl, self.ml)["k"]
+            print(initial_k)
+        else:
+            initial_k = self.determine_split_level(initial_superinstance,
+                                                   copy.deepcopy(self.clustering.construct_cluster_labeling()))
         # split the super-instance and place each new super-instance in its own cluster
         superinstances = self.split_superinstance(initial_superinstance, initial_k)
         self.clustering.clusters = []
@@ -56,19 +71,20 @@ class COBRAS_inspect(COBRAS_kmeans):
 
         if self.verbose:
             print(initial_k)
-            print("##############################################################""")
-            self.print_info_about_all_current_sis("After initial split")
+            print("##############################################################")
+        self.print_info_about_all_current_sis("After initial split", False)
 
         # the first bottom up merging step
         # the resulting cluster is the best clustering we have so use this as first valid clustering
         self.merge_containing_clusters(copy.deepcopy(self.clustering.construct_cluster_labeling()))
         last_valid_clustering = copy.deepcopy(self.clustering)
 
-        if self.verbose:
-            self.print_info_about_all_current_sis("after initial merge")
+        # if self.verbose:
+        self.print_info_about_all_current_sis("after initial merge")
 
         # while we have not reached the max number of questions
-        while len(self.ml) + len(self.cl) < self.max_questions:
+        while len(self.ml) + len(self.cl) < self.max_questions and metrics.adjusted_rand_score(
+                self.clustering.construct_cluster_labeling(), self.ground_truth_labels) != 1.0:
             # notify the querier that there is a new clustering
             # such that this new clustering can be displayed to the user
             self.querier.update_clustering(self.clustering)
@@ -96,14 +112,17 @@ class COBRAS_inspect(COBRAS_kmeans):
 
             # - splitting phase -
             # determine the splitlevel
-            split_level = self.determine_split_level(to_split, clustering_to_store)
+            if self.ground_split_level:
+                split_level = to_split.get_information(self.ground_truth_labels, self.cl, self.ml)["k"]
+            else:
+                split_level = self.determine_split_level(to_split, clustering_to_store)
             # split the chosen super-instance
             new_super_instances = self.split_superinstance(to_split, split_level)
 
             if self.verbose:
                 print("###################################### New iteration ######################################")
-                self.print_sis_parent_with_children(to_split, new_super_instances)
                 print(split_level)
+            self.print_sis_parent_with_children(to_split, new_super_instances)
 
             # add the new super-instances to the clustering (each in their own cluster)
             new_clusters = self.add_new_clusters_from_split(new_super_instances)
@@ -136,8 +155,8 @@ class COBRAS_inspect(COBRAS_kmeans):
             if fully_merged:
                 last_valid_clustering = copy.deepcopy(self.clustering)
 
-            if self.verbose:
-                self.print_info_about_all_current_sis("After merging")
+            # if self.verbose:
+            self.print_info_about_all_current_sis("After merging")
 
         # clustering procedure is finished
         # change the clustering result to the last valid clustering
@@ -145,24 +164,84 @@ class COBRAS_inspect(COBRAS_kmeans):
 
         # return the correct result based on what self.store_intermediate_results contains
         if self.store_intermediate_results:
-            return self.clustering, [clust for clust, _, _ in self.intermediate_results], [runtime for _, runtime, _ in
-                                                                                           self.intermediate_results], self.ml, self.cl
+            return (self.clustering, [clust for clust, _, _ in self.intermediate_results], [runtime for _, runtime, _ in
+                                                                                            self.intermediate_results],
+                    self.ml, self.cl, self.counter, self.information_gain)
         else:
             return self.clustering
+
+    def identify_superinstance_to_split(self):
+        if len(self.clustering.clusters) == 1 and len(self.clustering.clusters[0].super_instances) == 1:
+            return self.clustering.clusters[0].super_instances[0], self.clustering.clusters[0]
+
+        superinstance_to_split = None
+        max_heur = -np.inf
+        originating_cluster = None
+
+        for cluster in self.clustering.clusters:
+
+            if cluster.is_pure:
+                continue
+
+            if cluster.is_finished:
+                continue
+
+            for superinstance in cluster.super_instances:
+                if superinstance.tried_splitting:
+                    continue
+
+                if len(superinstance.indices) == 1:
+                    continue
+
+                if len(superinstance.train_indices) < 2:
+                    continue
+
+                heur = "size"
+                si_info = superinstance.get_information(self.ground_truth_labels, self.cl, self.ml)
+                if si_info[heur] > max_heur:
+                    # if len(superinstance.indices) > max_heur:
+                    superinstance_to_split = superinstance
+                    max_heur = si_info[heur]
+                    # max_heur = len(superinstance.indices)
+                    originating_cluster = cluster
+
+        if superinstance_to_split is None:
+            return None, None
+
+        return superinstance_to_split, originating_cluster
 
     def print_sis_parent_with_children(self, parent: SuperInstance_kmeans, children: list[SuperInstance_kmeans]):
         myTable = create_table(False)
 
-        add_si_info_to_table(parent.get_information(self.ground_truth_labels, cl=self.cl, ml=self.ml), -1, myTable,
-                             True)
+        # Information Gain = entropy(parent) - [weighted average] * entropy(children)
+        # https://medium.com/@ompramod9921/decision-trees-6a3c05e9cb82
+        parent_info = parent.get_information(self.ground_truth_labels, cl=self.cl, ml=self.ml)
+        entropy_parent = parent_info["label_entropy"]
+        size_parent = parent_info["size"]
+
+        if self.verbose:
+            add_si_info_to_table(parent_info, -1, myTable,
+                                 True)
+
+        weighted_average_children = 0
 
         for child in children:
-            add_si_info_to_table(child.get_information(self.ground_truth_labels, cl=self.cl, ml=self.ml), -1, myTable)
+            child_info = child.get_information(self.ground_truth_labels, cl=self.cl, ml=self.ml)
+            entropy_child = child_info["label_entropy"]
+            size_child = child_info["size"]
+            weighted_average_children += (size_child / size_parent) * entropy_child
 
-        myTable.title = "The parent split into children"
-        print(myTable)
+            if self.verbose:
+                add_si_info_to_table(child_info, -1, myTable)
 
-    def print_info_about_all_current_sis(self, when: str):
+        information_gain = entropy_parent - weighted_average_children
+        self.information_gain.append(round(information_gain, 4))
+
+        if self.verbose:
+            myTable.title = f"The parent split into children. The IG: {information_gain}"
+            print(myTable)
+
+    def print_info_about_all_current_sis(self, when: str, count_correct=True):
         sis_info = []
 
         myTable = create_table()
@@ -170,6 +249,14 @@ class COBRAS_inspect(COBRAS_kmeans):
 
         max_entropy = 0
         max_max, max_avg, max_var, max_size, max_med = 0, 0, 0, 0, 0
+
+        current_labeling = self.clustering.construct_cluster_labeling()
+
+        clusters_clv = np.zeros(len(set(current_labeling)))
+        for (id1, id2) in self.cl:
+            if current_labeling[id1] == current_labeling[id2]:
+                clusters_clv[current_labeling[id1]] += 1
+        # print(clusters_clv)
 
         for cluster_index, cluster in enumerate(self.clustering.clusters):
 
@@ -203,18 +290,57 @@ class COBRAS_inspect(COBRAS_kmeans):
             label_distribution = si_info["label_distribution"]
             ent = si_info["label_entropy"]
 
-            size = "\x1B[1;4m" + str(size) + "\x1B[0m" if size == max_size else str(size)
-            max_dist = "\x1B[1;4m" + str(max_dist) + "\x1B[0m" if max_dist == max_max else str(max_dist)
-            avg_dist = "\x1B[1;4m" + str(avg_dist) + "\x1B[0m" if avg_dist == max_avg else str(avg_dist)
-            var_dist = "\x1B[1;4m" + str(var_dist) + "\x1B[0m" if var_dist == max_var else str(var_dist)
-            med_dist = "\x1B[1;4m" + str(med_dist) + "\x1B[0m" if med_dist == max_med else str(med_dist)
-            ent = "\x1B[1;4m" + str(ent) + "\x1B[0m" if ent == max_entropy else str(ent)
+            if ent == max_entropy:
+                ent = "\x1B[1;4m" + str(ent) + "\x1B[0m"
+                if count_correct:
+                    nothing_was_correct = True
+                    if size == max_size:
+                        self.counter["size"] += 1
+                        nothing_was_correct = False
+
+                    if max_dist == max_max:
+                        self.counter["max_dist"] += 1
+                        nothing_was_correct = False
+
+                    if avg_dist == max_avg:
+                        self.counter["avg_dist"] += 1
+                        nothing_was_correct = False
+
+                    if var_dist == max_var:
+                        self.counter["var_dist"] += 1
+                        nothing_was_correct = False
+
+                    if med_dist == max_med:
+                        self.counter["med_dist"] += 1
+                        nothing_was_correct = False
+
+                    if nothing_was_correct:
+                        self.counter["nothing"] += 1
+                    self.counter["total"] += 1
+
+            if size == max_size:
+                size = "\x1B[1;4m" + str(size) + "\x1B[0m"
+
+            if max_dist == max_max:
+                max_dist = "\x1B[1;4m" + str(max_dist) + "\x1B[0m"
+
+            if avg_dist == max_avg:
+                avg_dist = "\x1B[1;4m" + str(avg_dist) + "\x1B[0m"
+
+            if var_dist == max_var:
+                var_dist = "\x1B[1;4m" + str(var_dist) + "\x1B[0m"
+
+            if med_dist == max_med:
+                med_dist = "\x1B[1;4m" + str(med_dist) + "\x1B[0m"
 
             myTable.add_row(
-                [si_info["cluster_index"], size, max_dist, avg_dist, med_dist, var_dist, si_info["clv"], label_distribution, ent],
+                [si_info["cluster_index"], size, max_dist, avg_dist, med_dist, var_dist, si_info["clv"],
+                 label_distribution, ent],
                 divider=si_info["divider"])
 
-        print(myTable)
+        if self.verbose:
+            print(myTable)
+            print(self.counter)
 
 
 def create_table(use_cluster_index=True):
