@@ -290,7 +290,7 @@ def put_all_tests_in_one_json(path: str, names):
 
 def main():
     # path = "testing_metric_learning_full_budget/"
-    path = "testing_trans_min_queries_20/"
+    path = "splitting_proc/metric_learning/testing_trans_min_queries_20/"
     # sets_to_test = ["iris", "ionosphere", "glass", "yeast", "normal_wine", "normal_wine_ax0", "wine"]
     # sets_to_test = ["wine", "normal_wine", "normal_wine_ax0"]
     sets_to_test = ["wine"]

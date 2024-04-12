@@ -12,7 +12,7 @@ from sklearn import metrics
 
 from cobras_ts.cobras_experements.cobras_incr_budget import COBRAS_incr_budget
 from cobras_ts.cobras_experements.cobras_incremental import COBRAS_incremental
-from cobras_ts.cobras_experements.cobras_inspect import COBRAS_inspect
+from cobras_ts.cobras_experements.cobras_inspect import COBRAS_inspect, Split_estimators
 from cobras_ts.cobras_experements.cobras_mini_merge import COBRAS_mini_merge
 from cobras_ts.cobras_experements.cobras_smart_split_level import COBRAS_smart_split_level
 from cobras_ts.cobras_kmeans import COBRAS_kmeans
@@ -22,6 +22,7 @@ from experments.metric_learner_tests import generate_2d_dataset
 
 simplefilter(action='ignore', category=FutureWarning)
 simplefilter(action='ignore', category=UserWarning)
+simplefilter(action="ignore", category=RuntimeWarning)
 
 
 # simplefilter(action='ignore', category=RuntimeWarning)
@@ -106,7 +107,7 @@ def test_normal(name: str, info: list[tuple], budget: int, n: int, seed=-1):
         clustering, intermediate_clustering, runtimes, ml, cl, clv = clusterer.cluster()
         end_time = time.time()
 
-        print(clv)
+        # print(clv)
         for (b, v) in clv:
             tot_clv[b] += v
 
@@ -129,7 +130,7 @@ def test_normal(name: str, info: list[tuple], budget: int, n: int, seed=-1):
 
     aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
 
-    print(tot_clv)
+    # print(tot_clv)
     tot_clv = np.array(tot_clv, dtype=np.float64)
     tot_clv /= n
     # tot_clv = tot_clv.astype(np.int32)
@@ -400,7 +401,9 @@ def test_inspect(name: str, info: list[tuple], budget: int, n: int, seed=-1):
 
         start_time = time.time()
         clusterer = COBRAS_inspect(data, LabelQuerier(labels),
-                                   max_questions=budget, verbose=False, ground_truth_labels=labels, ground_split_level=True)
+                                   max_questions=budget, verbose=True, ground_truth_labels=labels,
+                                   ground_split_level=False, use_nfa=False, starting_heur="size",
+                                   split_estimator=Split_estimators.ELBOW)
         clustering, intermediate_clustering, runtimes, ml, cl, counter, ig = clusterer.cluster()
         end_time = time.time()
 
@@ -495,6 +498,7 @@ def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, s
         colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
         i = 0
         lines = []
+        max_budget = -np.inf
 
         for dataset in datasets:
             print(dataset)
@@ -503,41 +507,56 @@ def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, s
             other_data = data[other]
 
             normal_budget = [*range(normal_data["#queries"])]
-            plt.plot(normal_budget, normal_data["ari"], color=colors[i])
 
-            if uses_metric_learner:
-                # mmc and itml are in it
-                mmc = other_data["mmc"]
-                itml = other_data["itml"]
-                mmc_budget = [*range(mmc["#queries"])]
-                itml_budget = [*range(itml["#queries"])]
+            if len(normal_budget) > max_budget:
+                max_budget = len(normal_budget)
 
-                plt.plot(mmc_budget, mmc["ari"], color=colors[i], linestyle="--")
-                plt.plot(itml_budget, itml["ari"], color=colors[i], linestyle=":")
-            else:
-                # same as normal
-                other_budget = [*range(other_data["#queries"])]
-                plt.plot(other_budget, other_data["ari"], color=colors[i], linestyle="--")
+            normal_ari = normal_data["ari"]
+            # plt.plot(normal_budget, normal_data["ari"], color=colors[i])
+
+            # if uses_metric_learner:
+            #     # mmc and itml are in it
+            #     mmc = other_data["mmc"]
+            #     itml = other_data["itml"]
+            #     mmc_budget = [*range(mmc["#queries"])]
+            #     itml_budget = [*range(itml["#queries"])]
+            #
+            #     plt.plot(mmc_budget, mmc["ari"], color=colors[i], linestyle="--")
+            #     plt.plot(itml_budget, itml["ari"], color=colors[i], linestyle=":")
+            # else:
+            # same as normal
+            other_budget = [*range(other_data["#queries"])]
+            other_ari = other_data["ari"]
+
+            while len(normal_ari) > len(other_ari):
+                other_ari.append(other_ari[-1])
+
+            differents_in_ari = np.array(other_ari) - np.array(normal_ari)
+
+            plt.plot(normal_budget, differents_in_ari, color=colors[i], linestyle="-")
 
             lines.append(Line2D([0, 1], [0, 1], linestyle="-", color=colors[i]))
             i += 1
 
         names = copy(list(datasets))
 
+        cobras = np.zeros(max_budget)
+        plt.plot(list(range(max_budget)), cobras, color="k", linestyle="-")
+
         names.append("COBRAS")
         lines.append(Line2D([0, 1], [0, 1], linestyle="-", color="k"))
 
-        if uses_metric_learner:
-            names.append(f"{other}+mmc")
-            lines.append(Line2D([0, 1], [0, 1], linestyle="--", color="k"))
+        # if uses_metric_learner:
+        #     names.append(f"{other}+mmc")
+        #     lines.append(Line2D([0, 1], [0, 1], linestyle="--", color="k"))
+        #
+        #     names.append(f"{other}+itml")
+        #     lines.append(Line2D([0, 1], [0, 1], linestyle=":", color="k"))
+        # else:
+        #     names.append(other)
+        #     lines.append(Line2D([0, 1], [0, 1], linestyle="--", color="k"))
 
-            names.append(f"{other}+itml")
-            lines.append(Line2D([0, 1], [0, 1], linestyle=":", color="k"))
-        else:
-            names.append(other)
-            lines.append(Line2D([0, 1], [0, 1], linestyle="--", color="k"))
-
-        plt.legend(lines, names, loc=4)
+        plt.legend(lines, names, loc=1)
         plt.show()
 
 
@@ -628,7 +647,6 @@ def graph_dataset(other: str, dataset: str, data: dict):
 
 
 def graph_normal_vs_experiment(other: str, path: str, uses_metric_learner: bool):
-    # example other = incremental
     # path should point to a folder that has an "everything file"
     with open(path + "/everything.json") as f:
         all_data = json.load(f)
@@ -646,6 +664,7 @@ def graph_normal_vs_experiment(other: str, path: str, uses_metric_learner: bool)
 
     return
 
+
 def graph_clv(path):
     with open(path + "/everything.json") as f:
         all_data = json.load(f)
@@ -657,6 +676,76 @@ def graph_clv(path):
         plt.plot(all_data[dataset]["normal"]["clv"], label=dataset)
     plt.legend()
     plt.show()
+
+
+def plot_estimating_k():
+    path = "estimating_k/"
+    paths = ["ground_truth", "full_tree_search", "elbow_method",
+             "silhouette_analysis", "calinski_harabasz_index",
+             "davies_bouldin_index"]
+
+    nrows = 2
+    ncols = 3
+    fig, axs = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, sharey=True)
+
+    data_sets = None
+
+    for index, p in enumerate(paths):
+
+        # if p == "full_tree_search":
+        #     continue
+
+        with open(path + p + "/everything.json") as f:
+            current_data = json.load(f)
+        if data_sets is None:
+            data_sets = list(current_data.keys())
+        elif data_sets != list(current_data.keys()):
+            print("Something is wrong")
+            raise Exception("fuck alles")
+
+        colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
+        color_index = 0
+        lines = []
+        max_budget = -np.inf
+
+        x = index // ncols
+        y = index % ncols
+        print(index, x, y)
+
+        for dataset in data_sets:
+            data = current_data[dataset]
+            normal_data = data["normal"]
+            inspect_data = data["inspect"]
+
+            normal_budget = [*range(normal_data["#queries"])]
+
+            if len(normal_budget) > max_budget:
+                max_budget = len(normal_budget)
+
+            normal_ari = normal_data["ari"]
+            inspect_ari = inspect_data["ari"]
+
+            while len(normal_ari) > len(inspect_ari):
+                inspect_ari.append(inspect_ari[-1])
+            differents_in_ari = np.array(inspect_ari) - np.array(normal_ari)
+
+            axs[x, y].plot(normal_budget, differents_in_ari, color=colors[color_index], linestyle="-")
+
+            color_index += 1
+
+        cobras = np.zeros(max_budget)
+        axs[x, y].plot(list(range(max_budget)), cobras, color="k", linestyle="-")
+        axs[x, y].set_title(p)
+
+    for ax in axs.flat:
+        ax.set(ylabel='difference in ARI', xlabel='budget')
+
+    # Hide x labels and tick labels for top plots and y ticks for right plots.
+    for ax in axs.flat:
+        ax.label_outer()
+
+    plt.show()
+
 
 def main():
     mmc_hyper_parameters = [
@@ -685,28 +774,26 @@ def main():
         #   ])
     ]
 
-    test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
+    # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
     test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "breast", "dermatology"]
+    test_sets = ["iris"]
 
-    # test_sets = ["circle", "combination", "combination", "blob", "circle", "moon"]
-    # paths = ["testing_smart_split_level/only_ground_k",
-    #          "testing_smart_split_level/each_iteration_only_using_ground_k",
-    #          "testing_smart_split_level/using_k_only_in_a_iteration",
-    #          "testing_smart_split_level/each_iteration_split_level_and_ground_k_avg",
-    #          "testing_smart_split_level/each_iteration_split_level_and_ground_k_min",
-    #          "testing_smart_split_level/each_iteration_split_level_and_ground_k_max"]
-
-    paths = ["testing_smart_split_level/using_ground_labeling_to_determenate_k"]
+    # paths = ["estimating_k/ground_truth", "estimating_k/full_tree_search", "estimating_k/elbow_method",
+    #          "estimating_k/silhouette_analysis", "estimating_k/calinski_harabasz_index",
+    #          "estimating_k/davies_bouldin_index"]
+    # paths = ["estimating_k/gapstatistics"]
+    paths = ["this_is_only_for_testing"]
     for p in paths:
         # path = "testing_smart_split_level/only_ground_k"  # No "/" at the end
         seed = 31
-        test_cobras(test_sets, tests, p, 150, 5, seed)
+        test_cobras(test_sets, tests, p, 150, 1, seed)
         put_tests_in_one_json(p, test_sets)
         # print(p)
-        # graph_clv(p)
+        # # graph_clv(p)
         graph_normal_vs_experiment("inspect", p, False)
         print()
 
 
 if __name__ == "__main__":
     main()
+    # plot_estimating_k()

@@ -187,6 +187,6 @@ if __name__ == "__main__":
     #
     #     print()
     all_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
-    path = "testing_smart_split_level/only_ground_k"
+    path = "estimating_k/testing_smart_split_level/only_ground_k"
     test_smart_split_level(all_sets, ["normal", "smart"], path, 150, 3)
     put_all_tests_in_one_json(path + "/", all_sets)

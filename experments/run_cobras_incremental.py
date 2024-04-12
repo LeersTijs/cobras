@@ -131,7 +131,7 @@ def test_incremental_learner(data_sets, tests, path, seed, max_budget, n):
 
 
 def main():
-    path = "testing_incremental_learner_fully/"
+    path = "splitting_proc/metric_learning/testing_incremental_learner_fully/"
 
     all_sets = ["iris", "ionosphere", "glass", "yeast", "wine"]
     # all_sets = ["wine", "iris"]
