@@ -393,6 +393,8 @@ def test_inspect(name: str, info: list[tuple], budget: int, n: int, seed=-1):
     runs = {}
     max_queries_asked = 0
 
+    split_estimator = info[0][0]
+
     sum_counter = {"size": 0, "max_dist": 0, "avg_dist": 0, "med_dist": 0, "var_dist": 0, "nothing": 0, "total": 0}
 
     for index in range(n):
@@ -401,9 +403,9 @@ def test_inspect(name: str, info: list[tuple], budget: int, n: int, seed=-1):
 
         start_time = time.time()
         clusterer = COBRAS_inspect(data, LabelQuerier(labels),
-                                   max_questions=budget, verbose=True, ground_truth_labels=labels,
+                                   max_questions=budget, verbose=False, ground_truth_labels=labels,
                                    ground_split_level=False, use_nfa=False, starting_heur="size",
-                                   split_estimator=Split_estimators.ELBOW)
+                                   split_estimator=split_estimator)
         clustering, intermediate_clustering, runtimes, ml, cl, counter, ig = clusterer.cluster()
         end_time = time.time()
 
@@ -766,7 +768,7 @@ def main():
     tests = [
         ("normal", None),
         # ("smart", None),
-        ("inspect", None)
+        ("inspect", [(Split_estimators.X_MEANS, 0)])
         # ("mini_merge", [("", 2)])
         # ("incr_budget",
         #  [("mmc", mmc_hyper_parameters),
@@ -776,17 +778,17 @@ def main():
 
     # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
     test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "breast", "dermatology"]
-    test_sets = ["iris"]
+    # test_sets = ["iris"]
 
     # paths = ["estimating_k/ground_truth", "estimating_k/full_tree_search", "estimating_k/elbow_method",
     #          "estimating_k/silhouette_analysis", "estimating_k/calinski_harabasz_index",
     #          "estimating_k/davies_bouldin_index"]
     # paths = ["estimating_k/gapstatistics"]
-    paths = ["this_is_only_for_testing"]
+    paths = ["estimating_k/Xmeans"]
     for p in paths:
         # path = "testing_smart_split_level/only_ground_k"  # No "/" at the end
         seed = 31
-        test_cobras(test_sets, tests, p, 150, 1, seed)
+        test_cobras(test_sets, tests, p, 150, 5, seed)
         put_tests_in_one_json(p, test_sets)
         # print(p)
         # # graph_clv(p)

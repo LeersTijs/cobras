@@ -245,16 +245,24 @@ class COBRAS_inspect(COBRAS_kmeans):
         xmeans_instance = xmeans(data_to_cluster, initial_centers, 20)
         xmeans_instance.process()
         clusters = xmeans_instance.get_clusters()
+        # The clusters only has the indexes that reference to the Si and not to self.data
+        # Need to convert them to split_labels
+        split_labels = np.zeros(len(data_to_cluster), dtype=np.int32)
+        for label in range(1, len(clusters)):
+            for idx in clusters[label]:
+                split_labels[idx] = label
 
         training = []
         no_training = []
 
-        for cluster in clusters:
-            si_train_indices = [x for x in cluster if x in self.train_indices]
+        for new_si_idx in set(split_labels):
+            cur_indices = [si.indices[idx] for idx, c in enumerate(split_labels) if c == new_si_idx]
+
+            si_train_indices = [x for x in cur_indices if x in self.train_indices]
             if len(si_train_indices) != 0:
-                training.append(SuperInstance_kmeans(self.data, cluster, self.train_indices, si))
+                training.append(SuperInstance_kmeans(self.data, cur_indices, self.train_indices, si))
             else:
-                no_training.append((cluster, np.mean(self.data[cluster, :], axis=0)))
+                no_training.append((cur_indices, np.mean(self.data[cur_indices, :], axis=0)))
 
         for indices, centroid in no_training:
             closest_train = min(training, key=lambda x: np.linalg.norm(self.data[x.representative_idx, :] - centroid))
