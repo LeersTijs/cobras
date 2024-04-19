@@ -20,20 +20,21 @@ from cobras_ts.superinstance_kmeans import SuperInstance_kmeans
 
 
 class Split_estimators(Enum):
-    NORMAL = 0
-    FULL_TREE_SEARCH = 1
-    ELBOW = 2
-    SILHOUETTE_ANALYSIS = 3
-    CALINSKI_HARABASZ_INDEX = 4
-    DAVIES_BOULDIN_INDEX = 5
-    GAPSTATISTICS = 6
-    X_MEANS = 7
+    GROUND_TRUTH = 0
+    NORMAL = 1
+    FULL_TREE_SEARCH = 2
+    ELBOW = 3
+    SILHOUETTE_ANALYSIS = 4
+    CALINSKI_HARABASZ_INDEX = 5
+    DAVIES_BOULDIN_INDEX = 6
+    GAPSTATISTICS = 7
+    X_MEANS = 8
 
 
 class COBRAS_inspect(COBRAS_kmeans):
 
-    def __init__(self, data, querier, max_questions, ground_truth_labels: list[int], verbose=True,
-                 ground_split_level=False, use_nfa=False, starting_heur="size",
+    def __init__(self, data, querier, max_questions, ground_truth_labels: list[int], verbose=True, use_nfa=False,
+                 starting_heur="size",
                  split_estimator=Split_estimators.NORMAL):
         super().__init__(data, querier, max_questions)
 
@@ -42,7 +43,7 @@ class COBRAS_inspect(COBRAS_kmeans):
 
         self.ground_truth_labels = ground_truth_labels
         self.verbose = verbose
-        self.ground_split_level = ground_split_level
+        # self.ground_split_level = ground_split_level
         self.query_counter = 0
 
         self.split_estimator = split_estimator
@@ -77,14 +78,26 @@ class COBRAS_inspect(COBRAS_kmeans):
             self.nfa = None
         self.current_heur = starting_heur
 
-        self.counter = {"size": 0,
-                        "max_dist": 0,
-                        "avg_dist": 0,
-                        "med_dist": 0,
-                        "var_dist": 0,
-                        "nothing": 0,
-                        "total": 0}
+        self.counter_heuristics = {"size": 0,
+                                   "max_dist": 0,
+                                   "avg_dist": 0,
+                                   "med_dist": 0,
+                                   "var_dist": 0,
+                                   "nothing": 0,
+                                   "total": 0}
         self.information_gain = []
+
+        self.counter_k = {
+            Split_estimators.NORMAL: 0,
+            Split_estimators.FULL_TREE_SEARCH: 0,
+            Split_estimators.ELBOW: 0,
+            Split_estimators.SILHOUETTE_ANALYSIS: 0,
+            Split_estimators.CALINSKI_HARABASZ_INDEX: 0,
+            Split_estimators.DAVIES_BOULDIN_INDEX: 0,
+            Split_estimators.GAPSTATISTICS: 0,
+            Split_estimators.X_MEANS: 0,
+            "total": 0
+        }
 
     def cluster(self):
         """Perform clustering
@@ -111,13 +124,16 @@ class COBRAS_inspect(COBRAS_kmeans):
 
         # the split level for this initial super-instance is determined,
         # the super-instance is split, and a new cluster is created for each of the newly created super-instances
-        if self.ground_split_level:
-            initial_k = initial_superinstance.get_information(self.ground_truth_labels, self.cl, self.ml)["k"]
-            print(initial_k)
-        else:
-            self.query_counter = 0
-            initial_k = self.determine_split_level(initial_superinstance,
-                                                   copy.deepcopy(self.clustering.construct_cluster_labeling()))
+        self.query_counter = 0
+        initial_k = self.determine_split_level(initial_superinstance,
+                                               copy.deepcopy(self.clustering.construct_cluster_labeling()))
+        # if self.ground_split_level:
+        #     initial_k = initial_superinstance.get_information(self.ground_truth_labels, self.cl, self.ml)["k"]
+        #     print(initial_k)
+        # else:
+        #     self.query_counter = 0
+        #     initial_k = self.determine_split_level(initial_superinstance,
+        #                                            copy.deepcopy(self.clustering.construct_cluster_labeling()))
         # split the super-instance and place each new super-instance in its own cluster
         superinstances = self.split_superinstance(initial_superinstance, initial_k)
         self.clustering.clusters = []
@@ -172,11 +188,13 @@ class COBRAS_inspect(COBRAS_kmeans):
 
             # - splitting phase -
             # determine the splitlevel
-            if self.ground_split_level:
-                split_level = to_split.get_information(self.ground_truth_labels, self.cl, self.ml)["k"]
-            else:
-                self.query_counter = 0
-                split_level = self.determine_split_level(to_split, clustering_to_store)
+            self.query_counter = 0
+            split_level = self.determine_split_level(to_split, clustering_to_store)
+            # if self.ground_split_level:
+            #     split_level = to_split.get_information(self.ground_truth_labels, self.cl, self.ml)["k"]
+            # else:
+            #     self.query_counter = 0
+            #     split_level = self.determine_split_level(to_split, clustering_to_store)
             # split the chosen super-instance
             new_super_instances = self.split_superinstance(to_split, split_level)
 
@@ -227,7 +245,7 @@ class COBRAS_inspect(COBRAS_kmeans):
         if self.store_intermediate_results:
             return (self.clustering, [clust for clust, _, _ in self.intermediate_results], [runtime for _, runtime, _ in
                                                                                             self.intermediate_results],
-                    self.ml, self.cl, self.counter, self.information_gain)
+                    self.ml, self.cl, self.counter_heuristics, self.information_gain, self.counter_k)
         else:
             return self.clustering
 
@@ -237,7 +255,7 @@ class COBRAS_inspect(COBRAS_kmeans):
         else:
             return super().split_superinstance(si, k)
 
-    def split_superinstance_using_x_means(self, si):
+    def split_superinstance_using_x_means(self, si, only_calc_k=False):
         data_to_cluster = self.data[si.indices, :]
         initial_k = 2
         initial_centers = kmeans_plusplus_initializer(data_to_cluster, initial_k).initialize()
@@ -245,6 +263,10 @@ class COBRAS_inspect(COBRAS_kmeans):
         xmeans_instance = xmeans(data_to_cluster, initial_centers, 20)
         xmeans_instance.process()
         clusters = xmeans_instance.get_clusters()
+
+        if only_calc_k:
+            return len(clusters)
+
         # The clusters only has the indexes that reference to the Si and not to self.data
         # Need to convert them to split_labels
         split_labels = np.zeros(len(data_to_cluster), dtype=np.int32)
@@ -272,9 +294,24 @@ class COBRAS_inspect(COBRAS_kmeans):
 
         return training
 
+    def determine_split_level(self, superinstance: SuperInstance_kmeans, clustering_to_store):
+        true_k = superinstance.get_information(self.ground_truth_labels, self.cl, self.ml)["k"]
 
-    def determine_split_level(self, superinstance, clustering_to_store):
+        if len(superinstance.indices) <= 2:
+            return true_k
+
+        self.counter_k[Split_estimators.ELBOW] += true_k == self.determine_split_level_elbow(superinstance, clustering_to_store)
+        self.counter_k[Split_estimators.SILHOUETTE_ANALYSIS] += true_k == self.determine_split_level_with_a_scorer(superinstance, clustering_to_store, silhouette_score)
+        self.counter_k[Split_estimators.CALINSKI_HARABASZ_INDEX] += true_k == self.determine_split_level_with_a_scorer(superinstance, clustering_to_store, calinski_harabasz_score)
+        self.counter_k[Split_estimators.DAVIES_BOULDIN_INDEX] += true_k == self.determine_split_level_with_a_scorer(superinstance, clustering_to_store, davies_bouldin_score)
+        self.counter_k[Split_estimators.NORMAL] += true_k == super().determine_split_level(superinstance, clustering_to_store, False)
+        self.counter_k[Split_estimators.FULL_TREE_SEARCH] += true_k == self.full_tree_search(superinstance, clustering_to_store, use_queries=False)
+        self.counter_k[Split_estimators.X_MEANS] += true_k == self.split_superinstance_using_x_means(superinstance, only_calc_k=True)
+        self.counter_k["total"] += 1
+
         match self.split_estimator:
+            case Split_estimators.GROUND_TRUTH:
+                return superinstance.get_information(self.ground_truth_labels, self.cl, self.ml)["k"]
             case Split_estimators.NORMAL:
                 return super().determine_split_level(superinstance, clustering_to_store)
             case Split_estimators.FULL_TREE_SEARCH:
@@ -304,7 +341,7 @@ class COBRAS_inspect(COBRAS_kmeans):
                 return -1  # X_means will self determinate the k
 
     def search_whole_splitting_tree(self, superinstance, clustering_to_store, depth=0, debug=False, node=None,
-                                    budget=np.inf):
+                                    budget=np.inf, use_queries=True):
         """
                 Determine the splitting level for the given super-instance using a small amount of queries
 
@@ -344,7 +381,8 @@ class COBRAS_inspect(COBRAS_kmeans):
         self.query_counter += 1
         over_budget = False
         if self.querier.query_points(pt1, pt2):
-            self.ml.append((pt1, pt2))
+            if use_queries:
+                self.ml.append((pt1, pt2))
             # if debug:
             #     Splitting_level_node(len(left_child.indices), parent=node, link="ml")  # Left node
             #     Splitting_level_node(len(right_child.indices), parent=node, link="ml")  # Right node
@@ -352,12 +390,13 @@ class COBRAS_inspect(COBRAS_kmeans):
             if self.query_counter > budget:
                 over_budget = True
 
-            if self.store_intermediate_results:
+            if self.store_intermediate_results and use_queries:
                 self.intermediate_results.append(
                     (clustering_to_store, time.time() - self.start_time, len(self.ml) + len(self.cl)))
             split_level = 1  # if depth != 0 else 2
         else:
-            self.cl.append((pt1, pt2))
+            if use_queries:
+                self.cl.append((pt1, pt2))
             # if debug:
             #     left_node = Splitting_level_node(len(left_child.indices), parent=node, link="cl")  # Left node
             #     right_node = Splitting_level_node(len(right_child.indices), parent=node, link="cl")  # Right node
@@ -367,7 +406,7 @@ class COBRAS_inspect(COBRAS_kmeans):
             if self.query_counter > budget:
                 over_budget = True
 
-            if self.store_intermediate_results:
+            if self.store_intermediate_results and use_queries:
                 self.intermediate_results.append(
                     (clustering_to_store, time.time() - self.start_time, len(self.ml) + len(self.cl)))
 
@@ -375,15 +414,20 @@ class COBRAS_inspect(COBRAS_kmeans):
                 max_split = len(si.indices)
                 left_split, over_budget = self.search_whole_splitting_tree(left_child, clustering_to_store,
                                                                            depth=depth + 1,
-                                                                           debug=debug, node=left_node, budget=budget)
+                                                                           debug=debug,
+                                                                           node=left_node,
+                                                                           budget=budget,
+                                                                           use_queries=use_queries)
                 if debug and over_budget:
                     right_split = left_split
                     right_node.return_value = left_split
                 else:
                     right_split, over_budget = self.search_whole_splitting_tree(right_child, clustering_to_store,
-                                                                                depth=depth + 1, debug=debug,
+                                                                                depth=depth + 1,
+                                                                                debug=debug,
                                                                                 node=right_node,
-                                                                                budget=budget)
+                                                                                budget=budget,
+                                                                                use_queries=use_queries)
                 min_split = min(max_split, left_split + right_split)
                 # Make use of the return flag, to predict the right_child
                 split_level = max(2, min_split)
@@ -398,14 +442,15 @@ class COBRAS_inspect(COBRAS_kmeans):
         return split_level, over_budget
 
     def full_tree_search(self, superinstance, clustering_to_store,
-                         depth=0, debug=False, node=None, budget=np.inf):
+                         depth=0, debug=False, node=None, budget=np.inf, use_queries=True):
         splitting_level, _ = self.search_whole_splitting_tree(superinstance, clustering_to_store, depth, debug, node,
-                                                              budget)
+                                                              budget, use_queries=use_queries)
         return max([splitting_level, 2])  # So that we never try to split a SI into 1.
 
     def determine_split_level_elbow(self, superinstance, clustering_to_store):
         data_to_cluster = self.data[superinstance.indices, :]
         max_split = len(superinstance.indices)
+
         sum_of_squared_distances = []
         range_n_clusters = [*range(2, self.max_tested_k if self.max_tested_k < max_split else max_split)]
         for n_clusters in range_n_clusters:
@@ -425,7 +470,8 @@ class COBRAS_inspect(COBRAS_kmeans):
         avg_scores = []
         max_split = len(superinstance.indices)
         starting_split_level = 2
-        range_n_clusters = [*range(starting_split_level, self.max_tested_k if self.max_tested_k < max_split else max_split)]
+        range_n_clusters = [
+            *range(starting_split_level, self.max_tested_k if self.max_tested_k < max_split else max_split)]
 
         for n_clusters in range_n_clusters:
             clusterer = KMeans(n_clusters)
@@ -609,28 +655,28 @@ class COBRAS_inspect(COBRAS_kmeans):
                 if count_correct:
                     nothing_was_correct = True
                     if size == max_size:
-                        self.counter["size"] += 1
+                        self.counter_heuristics["size"] += 1
                         nothing_was_correct = False
 
                     if max_dist == max_max:
-                        self.counter["max_dist"] += 1
+                        self.counter_heuristics["max_dist"] += 1
                         nothing_was_correct = False
 
                     if avg_dist == max_avg:
-                        self.counter["avg_dist"] += 1
+                        self.counter_heuristics["avg_dist"] += 1
                         nothing_was_correct = False
 
                     if var_dist == max_var:
-                        self.counter["var_dist"] += 1
+                        self.counter_heuristics["var_dist"] += 1
                         nothing_was_correct = False
 
                     if med_dist == max_med:
-                        self.counter["med_dist"] += 1
+                        self.counter_heuristics["med_dist"] += 1
                         nothing_was_correct = False
 
                     if nothing_was_correct:
-                        self.counter["nothing"] += 1
-                    self.counter["total"] += 1
+                        self.counter_heuristics["nothing"] += 1
+                    self.counter_heuristics["total"] += 1
 
             # Underline the max values of each colum
             variables = {
@@ -657,7 +703,7 @@ class COBRAS_inspect(COBRAS_kmeans):
 
         if self.verbose:
             print(myTable)
-            print(self.counter)
+            print(self.counter_heuristics)
 
 
 def create_table(use_cluster_index=True):

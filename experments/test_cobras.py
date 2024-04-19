@@ -7,6 +7,7 @@ from warnings import simplefilter
 
 import numpy as np
 from matplotlib import pyplot as plt
+import matplotlib as mpl
 from matplotlib.lines import Line2D
 from sklearn import metrics
 
@@ -396,6 +397,17 @@ def test_inspect(name: str, info: list[tuple], budget: int, n: int, seed=-1):
     split_estimator = info[0][0]
 
     sum_counter = {"size": 0, "max_dist": 0, "avg_dist": 0, "med_dist": 0, "var_dist": 0, "nothing": 0, "total": 0}
+    sum_counter_k = {
+            Split_estimators.NORMAL: 0,
+            Split_estimators.FULL_TREE_SEARCH: 0,
+            Split_estimators.ELBOW: 0,
+            Split_estimators.SILHOUETTE_ANALYSIS: 0,
+            Split_estimators.CALINSKI_HARABASZ_INDEX: 0,
+            Split_estimators.DAVIES_BOULDIN_INDEX: 0,
+            Split_estimators.GAPSTATISTICS: 0,
+            Split_estimators.X_MEANS: 0,
+            "total": 0
+        }
 
     for index in range(n):
         data, labels = get_norm_data_set(name)
@@ -404,9 +416,9 @@ def test_inspect(name: str, info: list[tuple], budget: int, n: int, seed=-1):
         start_time = time.time()
         clusterer = COBRAS_inspect(data, LabelQuerier(labels),
                                    max_questions=budget, verbose=False, ground_truth_labels=labels,
-                                   ground_split_level=False, use_nfa=False, starting_heur="size",
+                                   use_nfa=False, starting_heur="size",
                                    split_estimator=split_estimator)
-        clustering, intermediate_clustering, runtimes, ml, cl, counter, ig = clusterer.cluster()
+        clustering, intermediate_clustering, runtimes, ml, cl, counter, ig, counter_k = clusterer.cluster()
         end_time = time.time()
 
         aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
@@ -422,13 +434,16 @@ def test_inspect(name: str, info: list[tuple], budget: int, n: int, seed=-1):
             max_queries_asked = queries
         runs[index] = {"#queries": queries, "ari": aris, "time": runtimes}
 
+        for key in counter_k.keys():
+            sum_counter_k[key] += counter_k[key]
+
         for key in counter.keys():
             sum_counter[key] += counter[key]
 
     aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
 
     print(sum_counter)
-    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs, "counter": sum_counter}
+    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs, "counter": sum_counter, "counter_k": sum_counter_k}
 
 
 def avg_counting(counting: dict) -> dict:
@@ -444,6 +459,17 @@ def avg_counting(counting: dict) -> dict:
 
 def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget: int, n: int, seed=-1):
     total_counter = {"size": 0, "max_dist": 0, "avg_dist": 0, "med_dist": 0, "var_dist": 0, "nothing": 0, "total": 0}
+    total_counter_k = {
+            Split_estimators.NORMAL: 0,
+            Split_estimators.FULL_TREE_SEARCH: 0,
+            Split_estimators.ELBOW: 0,
+            Split_estimators.SILHOUETTE_ANALYSIS: 0,
+            Split_estimators.CALINSKI_HARABASZ_INDEX: 0,
+            Split_estimators.DAVIES_BOULDIN_INDEX: 0,
+            Split_estimators.GAPSTATISTICS: 0,
+            Split_estimators.X_MEANS: 0,
+            "total": 0
+        }
 
     for name in data_sets:
         print(f"############### Using: {name} ###############")
@@ -469,10 +495,14 @@ def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget:
                     dataset_result["mini_merge"] = mini_merge
                 case "inspect":
                     inspect = test_inspect(name, info, max_budget, n, seed)
-                    dataset_result["inspect"] = inspect
-
                     for key in inspect["counter"].keys():
                         total_counter[key] += inspect["counter"][key]
+
+                    for key in inspect["counter_k"].keys():
+                        total_counter_k[key] += inspect["counter_k"][key]
+
+                    del inspect["counter_k"]
+                    dataset_result["inspect"] = inspect
                 case _:
                     raise ValueError("The given algo is not implemented")
             print()
@@ -481,12 +511,36 @@ def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget:
             print(total_counter)
             print(avg_counting(total_counter))
 
+        if not total_counter_k["total"] == 0:
+            print(total_counter_k)
+            print(avg_counting(total_counter_k))
+
         json_object = json.dumps(dataset_result, indent=2)
         json_object = re.sub(r'": \[\s+', '": [', json_object)
         json_object = re.sub(r'(\d),\s+', r'\1, ', json_object)
         json_object = re.sub(r'(\d)\n\s+]', r'\1]', json_object)
         with open(f"{path}/{name}.json", "w") as f:
             f.write(json_object)
+
+
+def calc_difference_in_ari(data, other: str, max_budget: float):
+    normal_data = data["normal"]
+    other_data = data[other]
+
+    normal_budget = [*range(normal_data["#queries"])]
+
+    if len(normal_budget) > max_budget:
+        max_budget = len(normal_budget)
+
+    normal_ari = normal_data["ari"]
+
+    other_ari = other_data["ari"]
+
+    while len(normal_ari) > len(other_ari):
+        other_ari.append(other_ari[-1])
+
+    differents_in_ari = np.array(other_ari) - np.array(normal_ari)
+    return differents_in_ari, max_budget
 
 
 def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, split_in_multiple_graphs=1):
@@ -505,37 +559,9 @@ def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, s
         for dataset in datasets:
             print(dataset)
             data = all_data[dataset]
-            normal_data = data["normal"]
-            other_data = data[other]
+            difference_in_ari, max_budget = calc_difference_in_ari(data, other, max_budget)
 
-            normal_budget = [*range(normal_data["#queries"])]
-
-            if len(normal_budget) > max_budget:
-                max_budget = len(normal_budget)
-
-            normal_ari = normal_data["ari"]
-            # plt.plot(normal_budget, normal_data["ari"], color=colors[i])
-
-            # if uses_metric_learner:
-            #     # mmc and itml are in it
-            #     mmc = other_data["mmc"]
-            #     itml = other_data["itml"]
-            #     mmc_budget = [*range(mmc["#queries"])]
-            #     itml_budget = [*range(itml["#queries"])]
-            #
-            #     plt.plot(mmc_budget, mmc["ari"], color=colors[i], linestyle="--")
-            #     plt.plot(itml_budget, itml["ari"], color=colors[i], linestyle=":")
-            # else:
-            # same as normal
-            other_budget = [*range(other_data["#queries"])]
-            other_ari = other_data["ari"]
-
-            while len(normal_ari) > len(other_ari):
-                other_ari.append(other_ari[-1])
-
-            differents_in_ari = np.array(other_ari) - np.array(normal_ari)
-
-            plt.plot(normal_budget, differents_in_ari, color=colors[i], linestyle="-")
+            plt.plot([*range(len(difference_in_ari))], difference_in_ari, color=colors[i], linestyle="-")
 
             lines.append(Line2D([0, 1], [0, 1], linestyle="-", color=colors[i]))
             i += 1
@@ -660,6 +686,8 @@ def graph_normal_vs_experiment(other: str, path: str, uses_metric_learner: bool)
     graph_every_dataset(other, all_data, data_sets, uses_metric_learner,
                         split_in_multiple_graphs=1 if uses_metric_learner else 1)
 
+    plot_avg_over_dataset(other, "./", [path], [other], [1.0])
+
     if uses_metric_learner:
         for dataset in data_sets:
             graph_dataset(other, dataset, all_data[dataset])
@@ -680,73 +708,91 @@ def graph_clv(path):
     plt.show()
 
 
-def plot_estimating_k():
-    path = "estimating_k/"
+def plot_estimating_k(show=True, title="estimation of k"):
+    start_path = "./estimating_k/"
     paths = ["ground_truth", "full_tree_search", "elbow_method",
              "silhouette_analysis", "calinski_harabasz_index",
-             "davies_bouldin_index"]
+             "davies_bouldin_index", "Xmeans"]
 
-    nrows = 2
-    ncols = 3
-    fig, axs = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, sharey=True)
+    labels = ["ground truth", "full tree search", "elbow", "SI", "CH", "DB", "Xmeans"]
+    alphas = [1]
+    alphas.extend([0.2] * len(labels))
+    plot_avg_over_dataset(title, start_path, paths, labels, alphas, loc=0, show=show)
 
-    data_sets = None
 
-    for index, p in enumerate(paths):
+def plot_selection_avg(show=True):
+    start_path = "./heuristic/"
+    paths = ["using_entropy", "max_dist", "var_dist", "avg_dist", "med_dist"]
 
-        # if p == "full_tree_search":
-        #     continue
+    labels = ["ground truth", "max distance", "variance distance", "mean distance", "median distance"]
+    alphas = [1]
+    alphas.extend([0.3] * len(labels))
+    plot_avg_over_dataset("selection", start_path, paths, labels, alphas, show=show)
 
-        with open(path + p + "/everything.json") as f:
-            current_data = json.load(f)
-        if data_sets is None:
-            data_sets = list(current_data.keys())
-        elif data_sets != list(current_data.keys()):
-            print("Something is wrong")
-            raise Exception("fuck alles")
 
-        colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
-        color_index = 0
-        lines = []
-        max_budget = -np.inf
+def plot_avg_over_dataset(title: str, start_path: str, paths: list[str], labels: list[str], alphas: list[float], loc=3,
+                          show=True):
+    colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
+    i = 0
 
-        x = index // ncols
-        y = index % ncols
-        print(index, x, y)
+    max_budget = -np.inf
 
-        for dataset in data_sets:
-            data = current_data[dataset]
-            normal_data = data["normal"]
-            inspect_data = data["inspect"]
+    for path in paths:
+        avg_diff, budget = get_avg_over_datasets(start_path + path)
+        if budget > max_budget:
+            max_budget = budget
 
-            normal_budget = [*range(normal_data["#queries"])]
+        plt.plot([*range(len(avg_diff))], avg_diff, color=colors[i], label=labels[i], linestyle="-", alpha=alphas[i])
+        i += 1
 
-            if len(normal_budget) > max_budget:
-                max_budget = len(normal_budget)
+    cobras = np.zeros(max_budget)
+    plt.plot(list(range(max_budget)), cobras, color="k", label="COBRAS", linestyle="-")
+    plt.xlabel("number of queries asked")
+    plt.ylabel("difference in ARI")
+    plt.title(title)
 
-            normal_ari = normal_data["ari"]
-            inspect_ari = inspect_data["ari"]
+    plt.legend(loc=loc)
+    # plt.show(block=block)
+    if show:
+        plt.show()
+    else:
+        plt.figure()
 
-            while len(normal_ari) > len(inspect_ari):
-                inspect_ari.append(inspect_ari[-1])
-            differents_in_ari = np.array(inspect_ari) - np.array(normal_ari)
 
-            axs[x, y].plot(normal_budget, differents_in_ari, color=colors[color_index], linestyle="-")
+def get_avg_over_datasets(path: str):
+    with open(path + "/everything.json") as f:
+        all_data = json.load(f)
 
-            color_index += 1
+    datasets = list(all_data.keys())
+    max_budget = -np.inf
 
-        cobras = np.zeros(max_budget)
-        axs[x, y].plot(list(range(max_budget)), cobras, color="k", linestyle="-")
-        axs[x, y].set_title(p)
+    total_difference = np.zeros(0, dtype=np.float64)
+    counter = np.zeros(0, dtype=np.int32)
 
-    for ax in axs.flat:
-        ax.set(ylabel='difference in ARI', xlabel='budget')
+    for dataset in datasets:
+        data = all_data[dataset]
+        difference_in_ari, max_budget = calc_difference_in_ari(data, "inspect", max_budget)
 
-    # Hide x labels and tick labels for top plots and y ticks for right plots.
-    for ax in axs.flat:
-        ax.label_outer()
+        if len(total_difference) < len(difference_in_ari):
+            total_difference = total_difference.tolist()
+            total_difference.extend([0] * (len(difference_in_ari) - len(total_difference)))
+            total_difference = np.array(total_difference, dtype=np.float64)
 
-    plt.show()
+            counter = counter.tolist()
+            counter.extend([0] * (len(difference_in_ari) - len(counter)))
+            counter = np.array(counter, dtype=np.int32)
+
+        counter += 1
+        total_difference += difference_in_ari
+
+    avg_difference = total_difference / counter
+    return avg_difference, max_budget
+
+
+def plot_poster_graphs(style="seaborn-v0_8-poster", show=True):
+    mpl.style.use(style)
+    plot_selection_avg(False)
+    plot_estimating_k(show)
 
 
 def main():
@@ -768,7 +814,7 @@ def main():
     tests = [
         ("normal", None),
         # ("smart", None),
-        ("inspect", [(Split_estimators.X_MEANS, 0)])
+        ("inspect", [(Split_estimators.GROUND_TRUTH, -1)])
         # ("mini_merge", [("", 2)])
         # ("incr_budget",
         #  [("mmc", mmc_hyper_parameters),
@@ -778,17 +824,17 @@ def main():
 
     # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
     test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "breast", "dermatology"]
-    # test_sets = ["iris"]
+    # test_sets = ["iris", "wine"]
 
     # paths = ["estimating_k/ground_truth", "estimating_k/full_tree_search", "estimating_k/elbow_method",
     #          "estimating_k/silhouette_analysis", "estimating_k/calinski_harabasz_index",
     #          "estimating_k/davies_bouldin_index"]
     # paths = ["estimating_k/gapstatistics"]
-    paths = ["estimating_k/Xmeans"]
+    paths = ["estimating_k/calculating_%"]
     for p in paths:
         # path = "testing_smart_split_level/only_ground_k"  # No "/" at the end
         seed = 31
-        test_cobras(test_sets, tests, p, 150, 5, seed)
+        test_cobras(test_sets, tests, p, 150, 3, seed)
         put_tests_in_one_json(p, test_sets)
         # print(p)
         # # graph_clv(p)
@@ -796,6 +842,24 @@ def main():
         print()
 
 
+def test_mpl_styles():
+    styles = sorted(style for style in mpl.style.available if style != "classic")
+    print(styles)
+    for idx, style in enumerate(styles):
+        print(style)
+        plot_poster_graphs(style, False if idx != len(styles) - 1 else True)
+
+    style_list = ['default', 'classic'] + sorted(
+        style for style in plt.style.available
+        if style != 'classic' and not style.startswith('_'))
+
+    # Plot a demonstration figure for every available style sheet.
+    for idx, style_label in enumerate(style_list):
+        with plt.rc_context({"figure.max_open_warning": len(style_list)}):
+            with plt.style.context(style_label):
+                plot_poster_graphs(style_label, False if idx != len(style_list) - 1 else True)
+
+
 if __name__ == "__main__":
     main()
-    # plot_estimating_k()
+    # plot_poster_graphs()

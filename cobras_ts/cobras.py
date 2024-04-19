@@ -206,7 +206,7 @@ class COBRAS(abc.ABC):
         """
         return
 
-    def determine_split_level(self, superinstance, clustering_to_store):
+    def determine_split_level(self, superinstance, clustering_to_store, use_queries=True):
         """ Determine the splitting level for the given super-instance using a small amount of queries
 
         For each query that is posed during the execution of this method the given clustering_to_store is stored as an intermediate result.
@@ -244,16 +244,19 @@ class COBRAS(abc.ABC):
             pt2 = max([s1.representative_idx, s2.representative_idx])
 
             if self.querier.query_points(pt1, pt2):
-                self.ml.append((pt1, pt2))
+                if use_queries:
+                    self.ml.append((pt1, pt2))
+
                 must_link_found = True
-                if self.store_intermediate_results:
+                if self.store_intermediate_results and use_queries:
                     self.intermediate_results.append(
                         (clustering_to_store, time.time() - self.start_time, len(self.ml) + len(self.cl)))
                 continue
             else:
-                self.cl.append((pt1, pt2))
+                if use_queries:
+                    self.cl.append((pt1, pt2))
                 split_level += 1
-                if self.store_intermediate_results:
+                if self.store_intermediate_results and use_queries:
                     self.intermediate_results.append(
                         (clustering_to_store, time.time() - self.start_time, len(self.ml) + len(self.cl)))
 
