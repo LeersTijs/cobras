@@ -27,7 +27,7 @@ import scipy.stats as st
 
 def friedman_aligned_ranks_test(*args):
     """
-        Performs a Friedman aligned ranks ranking test.
+        Performs a Friedman aligned_all_together ranks ranking test.
         Tests the hypothesis that in a set of k dependent samples groups (where k >= 2) at least two of the groups represent populations with different median values.
         The difference with a friedman test is that it uses the median of each group to construct the ranking, which is useful when the number of samples is low.
 
@@ -165,4 +165,7 @@ if __name__ == "__main__":
     df = pd.DataFrame(columns=["size", "max dist", "avg dist", "med dist", "var dist"])
     # df.add([2, 3.4, 4.5, 3, 7], axis="rows")
     df.loc[len(df.index)] = [2, 3.4, 4.5, 3, 7]
+    df.loc[len(df.index)] = [4, 3, 4, 7, 5]
+
+    friedman_aligned_ranks_test(*df.values)
     print(df)

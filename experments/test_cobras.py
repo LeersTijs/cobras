@@ -6,16 +6,20 @@ from copy import copy
 from warnings import simplefilter
 
 import numpy as np
+import scipy.signal
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 from matplotlib.lines import Line2D
 from sklearn import metrics
+from sklearn.manifold import TSNE
 
 from cobras_ts.cobras_experements.cobras_incr_budget import COBRAS_incr_budget
 from cobras_ts.cobras_experements.cobras_incremental import COBRAS_incremental
-from cobras_ts.cobras_experements.cobras_inspect import COBRAS_inspect, Split_estimators
+from cobras_ts.cobras_experements.cobras_inspect import COBRAS_inspect, Split_estimators, Heuristics
+from cobras_ts.cobras_experements.cobras_metric_learner import COBRAS_metric_learner
 from cobras_ts.cobras_experements.cobras_mini_merge import COBRAS_mini_merge
 from cobras_ts.cobras_experements.cobras_smart_split_level import COBRAS_smart_split_level
+from cobras_ts.cobras_hdbscan import COBRAS_hdbscan
 from cobras_ts.cobras_kmeans import COBRAS_kmeans
 from cobras_ts.querier import LabelQuerier
 from experments.get_data_set import get_norm_data_set
@@ -98,19 +102,25 @@ def test_normal(name: str, info: list[tuple], budget: int, n: int, seed=-1):
     runs = {}
     max_queries_asked = 0
     tot_clv = [0] * (budget + 1)
+    tot_cv = [0] * (budget + 1)
 
     for index in range(n):
         data, labels = get_norm_data_set(name)
+        # data = TSNE().fit_transform(data)
 
         start_time = time.time()
         clusterer = COBRAS_kmeans(data, LabelQuerier(labels),
                                   max_questions=budget)
-        clustering, intermediate_clustering, runtimes, ml, cl, clv = clusterer.cluster()
+        clustering, intermediate_clustering, runtimes, ml, cl, clv, cv = clusterer.cluster()
         end_time = time.time()
 
-        # print(clv)
         for (b, v) in clv:
             tot_clv[b] += v
+        # print(f"clv: {tot_clv}")
+
+        for (b, v) in cv:
+            tot_cv[b] += v
+        # print(f"cv: {tot_cv}")
 
         aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
         # nmis = list(map(lambda x: metrics.normalized_mutual_info_score(x, labels), intermediate_clustering))
@@ -127,18 +137,145 @@ def test_normal(name: str, info: list[tuple], budget: int, n: int, seed=-1):
               f"amount of queries asked: {queries}")
         if queries > max_queries_asked:
             max_queries_asked = queries
-        runs[index] = {"#queries": queries, "ari": aris, "time": runtimes, "clv": clv}
+        runs[index] = {"#queries": queries, "ari": aris, "time": runtimes, "clv": clv, "cv": cv}
 
     aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
 
     # print(tot_clv)
     tot_clv = np.array(tot_clv, dtype=np.float64)
     tot_clv /= n
+    tot_cv = np.array(tot_cv, dtype=np.float64)
+    tot_cv /= n
     # tot_clv = tot_clv.astype(np.int32)
     tot_clv = tot_clv.tolist()
-    print(tot_clv)
+    # print(f"clv: {tot_clv}")
+    tot_cv = tot_cv.tolist()
+    print(f"cv: {tot_cv}")
 
-    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs, "clv": tot_clv}
+    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs, "clv": tot_clv, "cv": tot_cv}
+
+
+def test_metric_learning(name: str, info: list[tuple], budget: int, n: int, seed=-1):
+    result = {}
+
+    for metric_learner_name, parameters_to_test in info:
+        print(metric_learner_name, parameters_to_test)
+        result[metric_learner_name] = {}
+
+        keys = []
+        for hyper_parameters in parameters_to_test:
+            print(metric_learner_name, hyper_parameters)
+
+            if seed != -1:
+                np.random.seed(seed)
+
+            runs = {}
+            max_queries_asked = 0
+
+            for index in range(n):
+                try:
+                    data, labels = get_norm_data_set(name)
+                    start_time = time.time()
+                    clusterer = COBRAS_metric_learner(data, LabelQuerier(labels),
+                                                      max_questions=budget,
+                                                      metric_learner_info=hyper_parameters)
+                    clustering, intermediate_clustering, runtimes, ml, cl, clv, cv = clusterer.cluster()
+                    end_time = time.time()
+
+                    aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
+
+                    clustering_labeling = clustering.construct_cluster_labeling()
+                    ari = metrics.adjusted_rand_score(clustering_labeling, labels)
+                    t = end_time - start_time
+                    print(f"Budget: {budget}, "
+                          f"ARI: {ari}, "
+                          f"time: {t}, "
+                          f"amount of queries asked: {len(ml) + len(cl)}")
+
+                    if len(ml) + len(cl) > max_queries_asked:
+                        max_queries_asked = len(ml) + len(cl)
+                except Exception as e:
+                    print("Error happend: ", e)
+                    aris, runtimes = [], []
+                    ml, cl = [], []
+
+                runs[index] = {"#queries": len(ml) + len(cl), "ari": aris, "time": runtimes}
+
+            dict_key = convert_hyper_parm_to_key(hyper_parameters)
+
+            avg_ari, avg_time = average_over_aris_and_times(max_queries_asked, n, runs)
+            result[metric_learner_name][dict_key] = {"#queries": max_queries_asked,
+                                                     "ari": avg_ari, "time": avg_time,
+                                                     "runs": runs}
+            keys.append(dict_key)
+
+        max_budget, overall_avg_ari, overall_avg_time = average_over_parameters(keys, result[metric_learner_name])
+        result[metric_learner_name]["#queries"] = max_budget
+        result[metric_learner_name]["ari"] = overall_avg_ari
+        result[metric_learner_name]["time"] = overall_avg_time
+
+    return result
+
+
+
+def test_hdscan(name: str, info: list[tuple], budget: int, n: int, seed=-1):
+    if seed != -1:
+        np.random.seed(seed)
+
+    runs = {}
+    max_queries_asked = 0
+    tot_clv = [0] * (budget + 1)
+    tot_cv = [0] * (budget + 1)
+
+    for index in range(n):
+        data, labels = get_norm_data_set(name)
+        data = TSNE().fit_transform(data)
+
+        start_time = time.time()
+        clusterer = COBRAS_hdbscan(data, LabelQuerier(labels),
+                                   max_questions=budget)
+        clustering, intermediate_clustering, runtimes, ml, cl, clv, cv = clusterer.cluster()
+        end_time = time.time()
+
+        for (b, v) in clv:
+            tot_clv[b] += v
+        # print(f"clv: {tot_clv}")
+
+        for (b, v) in cv:
+            tot_cv[b] += v
+        # print(f"cv: {tot_cv}")
+
+        aris = list(map(lambda x: metrics.adjusted_rand_score(x, labels), intermediate_clustering))
+        # nmis = list(map(lambda x: metrics.normalized_mutual_info_score(x, labels), intermediate_clustering))
+
+        clustering_labeling = clustering.construct_cluster_labeling()
+        ari = metrics.adjusted_rand_score(clustering_labeling, labels)
+        # nmi = metrics.normalized_mutual_info_score(clustering_labeling, labels)
+        t = end_time - start_time
+        queries = len(ml) + len(cl)
+        print(f"Budget: {budget}, "
+              f"ARI: {ari}, "
+              # f"NMI: {nmi}, "
+              f"time: {t}, "
+              f"amount of queries asked: {queries}")
+        if queries > max_queries_asked:
+            max_queries_asked = queries
+        runs[index] = {"#queries": queries, "ari": aris, "time": runtimes, "clv": clv, "cv": cv}
+
+    aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
+
+    # print(tot_clv)
+    tot_clv = np.array(tot_clv, dtype=np.float64)
+    tot_clv /= n
+    tot_cv = np.array(tot_cv, dtype=np.float64)
+    tot_cv /= n
+    # tot_clv = tot_clv.astype(np.int32)
+    tot_clv = tot_clv.tolist()
+    # print(f"clv: {tot_clv}")
+    tot_cv = tot_cv.tolist()
+    print(f"cv: {tot_cv}")
+
+    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs, "clv": tot_clv, "cv": tot_cv}
 
 
 def test_smart(name: str, info: list[tuple], budget: int, n: int, seed=-1):
@@ -395,19 +532,22 @@ def test_inspect(name: str, info: list[tuple], budget: int, n: int, seed=-1):
     max_queries_asked = 0
 
     split_estimator = info[0][0]
+    starting_heuristic = info[0][1]
+    verbose = info[0][2]
+    print(verbose)
 
     sum_counter = {"size": 0, "max_dist": 0, "avg_dist": 0, "med_dist": 0, "var_dist": 0, "nothing": 0, "total": 0}
     sum_counter_k = {
-            Split_estimators.NORMAL: 0,
-            Split_estimators.FULL_TREE_SEARCH: 0,
-            Split_estimators.ELBOW: 0,
-            Split_estimators.SILHOUETTE_ANALYSIS: 0,
-            Split_estimators.CALINSKI_HARABASZ_INDEX: 0,
-            Split_estimators.DAVIES_BOULDIN_INDEX: 0,
-            Split_estimators.GAPSTATISTICS: 0,
-            Split_estimators.X_MEANS: 0,
-            "total": 0
-        }
+        Split_estimators.NORMAL: 0,
+        Split_estimators.FULL_TREE_SEARCH: 0,
+        Split_estimators.ELBOW: 0,
+        Split_estimators.SILHOUETTE_ANALYSIS: 0,
+        Split_estimators.CALINSKI_HARABASZ_INDEX: 0,
+        Split_estimators.DAVIES_BOULDIN_INDEX: 0,
+        Split_estimators.GAPSTATISTICS: 0,
+        Split_estimators.X_MEANS: 0,
+        "total": 0
+    }
 
     for index in range(n):
         data, labels = get_norm_data_set(name)
@@ -415,8 +555,8 @@ def test_inspect(name: str, info: list[tuple], budget: int, n: int, seed=-1):
 
         start_time = time.time()
         clusterer = COBRAS_inspect(data, LabelQuerier(labels),
-                                   max_questions=budget, verbose=False, ground_truth_labels=labels,
-                                   use_nfa=False, starting_heur="size",
+                                   max_questions=budget, verbose=verbose, ground_truth_labels=labels,
+                                   use_nfa=False, starting_heur=starting_heuristic,
                                    split_estimator=split_estimator)
         clustering, intermediate_clustering, runtimes, ml, cl, counter, ig, counter_k = clusterer.cluster()
         end_time = time.time()
@@ -443,7 +583,8 @@ def test_inspect(name: str, info: list[tuple], budget: int, n: int, seed=-1):
     aris, times = average_over_aris_and_times(max_queries_asked, n, runs)
 
     print(sum_counter)
-    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs, "counter": sum_counter, "counter_k": sum_counter_k}
+    return {"#queries": max_queries_asked, "ari": aris, "time": times, "runs": runs, "counter": sum_counter,
+            "counter_k": sum_counter_k}
 
 
 def avg_counting(counting: dict) -> dict:
@@ -460,16 +601,16 @@ def avg_counting(counting: dict) -> dict:
 def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget: int, n: int, seed=-1):
     total_counter = {"size": 0, "max_dist": 0, "avg_dist": 0, "med_dist": 0, "var_dist": 0, "nothing": 0, "total": 0}
     total_counter_k = {
-            Split_estimators.NORMAL: 0,
-            Split_estimators.FULL_TREE_SEARCH: 0,
-            Split_estimators.ELBOW: 0,
-            Split_estimators.SILHOUETTE_ANALYSIS: 0,
-            Split_estimators.CALINSKI_HARABASZ_INDEX: 0,
-            Split_estimators.DAVIES_BOULDIN_INDEX: 0,
-            Split_estimators.GAPSTATISTICS: 0,
-            Split_estimators.X_MEANS: 0,
-            "total": 0
-        }
+        Split_estimators.NORMAL: 0,
+        Split_estimators.FULL_TREE_SEARCH: 0,
+        Split_estimators.ELBOW: 0,
+        Split_estimators.SILHOUETTE_ANALYSIS: 0,
+        Split_estimators.CALINSKI_HARABASZ_INDEX: 0,
+        Split_estimators.DAVIES_BOULDIN_INDEX: 0,
+        Split_estimators.GAPSTATISTICS: 0,
+        Split_estimators.X_MEANS: 0,
+        "total": 0
+    }
 
     for name in data_sets:
         print(f"############### Using: {name} ###############")
@@ -481,6 +622,12 @@ def test_cobras(data_sets: list[str], tests: list[tuple], path: str, max_budget:
                 case "normal":
                     normal = test_normal(name, info, max_budget, n, seed)
                     dataset_result["normal"] = normal
+                case "metric_learning":
+                    metric_learning = test_metric_learning(name, info, max_budget, n, seed)
+                    dataset_result["metric_learning"] = metric_learning
+                case "hdbscan":
+                    hd = test_hdscan(name, info, max_budget, n, seed)
+                    dataset_result["hdbscan"] = hd
                 case "smart":
                     smart = test_smart(name, info, max_budget, n, seed)
                     dataset_result["smart"] = smart
@@ -543,7 +690,8 @@ def calc_difference_in_ari(data, other: str, max_budget: float):
     return differents_in_ari, max_budget
 
 
-def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, split_in_multiple_graphs=1):
+def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, split_in_multiple_graphs=1, path="",
+                        title=""):
     print(split_in_multiple_graphs)
     split_lists = np.array_split(data_sets, split_in_multiple_graphs)
     # print(split_lists)
@@ -551,7 +699,7 @@ def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, s
 
     for datasets in split_lists:
         print(f"current datasets: {datasets}")
-        colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
+        colors = ["g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
         i = 0
         lines = []
         max_budget = -np.inf
@@ -561,18 +709,30 @@ def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, s
             data = all_data[dataset]
             difference_in_ari, max_budget = calc_difference_in_ari(data, other, max_budget)
 
-            plt.plot([*range(len(difference_in_ari))], difference_in_ari, color=colors[i], linestyle="-")
+            plt.plot([*range(len(difference_in_ari))], difference_in_ari, color=colors[i], linestyle="--", alpha=0.5)
 
-            lines.append(Line2D([0, 1], [0, 1], linestyle="-", color=colors[i]))
+            lines.append(Line2D([0, 1], [0, 1], linestyle="--", color=colors[i], alpha=0.5))
             i += 1
 
         names = copy(list(datasets))
+
+        if path != "":
+            avg_diff, budget = get_avg_over_datasets(path, other, datasets)
+            names.append("Average")
+            plt.plot([*range(budget)], avg_diff, color="b", linestyle="-")
+            lines.append(Line2D([0, 1], [0, 1], linestyle="-", color="b"))
 
         cobras = np.zeros(max_budget)
         plt.plot(list(range(max_budget)), cobras, color="k", linestyle="-")
 
         names.append("COBRAS")
         lines.append(Line2D([0, 1], [0, 1], linestyle="-", color="k"))
+
+        plt.xlabel("Number of queries asked")
+        plt.ylabel("The difference in ARI compared to COBRAS")
+
+        if title != "":
+            plt.title(title)
 
         # if uses_metric_learner:
         #     names.append(f"{other}+mmc")
@@ -584,7 +744,7 @@ def graph_every_dataset(other, all_data, data_sets, uses_metric_learner: bool, s
         #     names.append(other)
         #     lines.append(Line2D([0, 1], [0, 1], linestyle="--", color="k"))
 
-        plt.legend(lines, names, loc=1)
+        plt.legend(lines, names, loc=0)
         plt.show()
 
 
@@ -674,19 +834,20 @@ def graph_dataset(other: str, dataset: str, data: dict):
     plt.show()
 
 
-def graph_normal_vs_experiment(other: str, path: str, uses_metric_learner: bool):
+def graph_normal_vs_experiment(other: str, path: str, uses_metric_learner: bool, title="", data_sets=None):
     # path should point to a folder that has an "everything file"
     with open(path + "/everything.json") as f:
         all_data = json.load(f)
 
     # Getting all the datasets that are in the "everything file"
-    data_sets = list(all_data.keys())
-    print(data_sets)
+    if data_sets is None:
+        data_sets = list(all_data.keys())
+        print(data_sets)
 
     graph_every_dataset(other, all_data, data_sets, uses_metric_learner,
-                        split_in_multiple_graphs=1 if uses_metric_learner else 1)
+                        split_in_multiple_graphs=1 if uses_metric_learner else 1, path="./" + path, title=title)
 
-    plot_avg_over_dataset(other, "./", [path], [other], [1.0])
+    plot_avg_over_dataset(other, "./", [path], [other], [1.0], other=other)
 
     if uses_metric_learner:
         for dataset in data_sets:
@@ -702,9 +863,60 @@ def graph_clv(path):
     data_sets = list(all_data.keys())
     print(data_sets)
 
+    tot_cv = None
+
     for dataset in data_sets:
-        plt.plot(all_data[dataset]["normal"]["clv"], label=dataset)
+        cv = all_data[dataset]["normal"]["clv"]
+        if tot_cv is None:
+            tot_cv = np.array(cv)
+        else:
+            tot_cv += np.array(cv)
+        # plt.plot(all_data[dataset]["normal"]["clv"], label=dataset)
+    # plt.legend()
+    # plt.show()
+
+    tot_cv /= len(data_sets)
+
+    # plt.plot(tot_cv.tolist(), label="avg")
+    # plt.xlabel("number of queries asked", fontweight="bold")
+    # plt.ylabel("Mean constrain violations inside a super-instance after splitting", fontweight="bold")
+    # plt.title("normal")
+    # plt.legend()
+    # plt.figure()
+    #
+    def moving_average(a, n=3):
+        ret = np.cumsum(a, dtype=float)
+        ret[n:] = ret[n:] - ret[:-n]
+        return ret[n - 1:] / n
+
+    # smoothed_med = scipy.ndimage.median_filter(tot_cv, 5)
+    smoothed_order = moving_average(tot_cv, 5)
+    # plt.plot(smoothed_med, label="med")
+    plt.plot(tot_cv, color="b", alpha=0.3, label="constrain violations")
+    plt.plot(smoothed_order, color="b", label="smoothed")
+    # print(smoothed.mean())
+    # plt.plot(smoothed, label="avg")
+    plt.xlabel("number of queries asked", fontweight="bold")
+    plt.ylabel("Mean constrain violations inside a super-instance after splitting", fontweight="bold")
     plt.legend()
+    # plt.figure()
+    plt.show()
+
+    # fig, ax = plt.subplots(figsize=(8, 4))
+    # ax.plot(trees_grid, train_acc.mean(axis=1), alpha=0.5, color='blue', label='train', linewidth=4.0)
+
+    # plt.plot(smoothed.mean(axis=1), alpha=0.5)
+    # plt.fill_between(smoothed.mean() - smoothed.std(), smoothed.mean() + smoothed.std())
+
+    # ax.plot(trees_grid, test_acc.mean(axis=1), alpha=0.5, color='red', label='cv', linewidth=1.0)
+    # ax.fill_between(trees_grid, test_acc.mean(axis=1) - test_acc.std(axis=1),
+    #                 test_acc.mean(axis=1) + test_acc.std(axis=1), color='#888888', alpha=0.4)
+    # ax.fill_between(trees_grid, test_acc.mean(axis=1) - 2 * test_acc.std(axis=1),
+    #                 test_acc.mean(axis=1) + 2 * test_acc.std(axis=1), color='#888888', alpha=0.2)
+    # ax.legend(loc='best')
+    # ax.set_ylim([0.88, 1.02])
+    # ax.set_ylabel("Accuracy")
+    # ax.set_xlabel("N_estimators")
     plt.show()
 
 
@@ -715,30 +927,43 @@ def plot_estimating_k(show=True, title="estimation of k"):
              "davies_bouldin_index", "Xmeans"]
 
     labels = ["ground truth", "full tree search", "elbow", "SI", "CH", "DB", "Xmeans"]
+
+    # paths = ["ground_truth"]
+    #
+    # labels = ["ground truth"]
+
+    paths = ["ground_truth", "elbow_method",
+             "silhouette_analysis", "calinski_harabasz_index",
+             "davies_bouldin_index", "Xmeans"]
+    labels = ["ground truth", "elbow", "SI", "CH", "DB", "X-means"]
+
     alphas = [1]
-    alphas.extend([0.2] * len(labels))
+    alphas.extend([1] * len(labels))
     plot_avg_over_dataset(title, start_path, paths, labels, alphas, loc=0, show=show)
 
 
 def plot_selection_avg(show=True):
     start_path = "./heuristic/"
     paths = ["using_entropy", "max_dist", "var_dist", "avg_dist", "med_dist"]
-
     labels = ["ground truth", "max distance", "variance distance", "mean distance", "median distance"]
+
+    paths = ["max_dist", "var_dist", "avg_dist", "med_dist"]
+    labels = ["max distance", "variance distance", "mean distance", "median distance"]
+
     alphas = [1]
-    alphas.extend([0.3] * len(labels))
+    alphas.extend([1] * len(labels))
     plot_avg_over_dataset("selection", start_path, paths, labels, alphas, show=show)
 
 
 def plot_avg_over_dataset(title: str, start_path: str, paths: list[str], labels: list[str], alphas: list[float], loc=3,
-                          show=True):
+                          show=True, fontweight="", other="inspect"):
     colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
     i = 0
 
     max_budget = -np.inf
 
     for path in paths:
-        avg_diff, budget = get_avg_over_datasets(start_path + path)
+        avg_diff, budget = get_avg_over_datasets(start_path + path, other)
         if budget > max_budget:
             max_budget = budget
 
@@ -747,8 +972,13 @@ def plot_avg_over_dataset(title: str, start_path: str, paths: list[str], labels:
 
     cobras = np.zeros(max_budget)
     plt.plot(list(range(max_budget)), cobras, color="k", label="COBRAS", linestyle="-")
-    plt.xlabel("number of queries asked")
-    plt.ylabel("difference in ARI")
+    if fontweight != "":
+        plt.xlabel("number of queries asked", fontweight=fontweight)
+        plt.ylabel("difference in ARI", fontweight=fontweight)
+    else:
+        plt.xlabel("number of queries asked")
+        plt.ylabel("difference in ARI")
+
     plt.title(title)
 
     plt.legend(loc=loc)
@@ -759,11 +989,12 @@ def plot_avg_over_dataset(title: str, start_path: str, paths: list[str], labels:
         plt.figure()
 
 
-def get_avg_over_datasets(path: str):
+def get_avg_over_datasets(path: str, other: str, datasets=None):
     with open(path + "/everything.json") as f:
         all_data = json.load(f)
 
-    datasets = list(all_data.keys())
+    if datasets is None:
+        datasets = list(all_data.keys())
     max_budget = -np.inf
 
     total_difference = np.zeros(0, dtype=np.float64)
@@ -771,7 +1002,7 @@ def get_avg_over_datasets(path: str):
 
     for dataset in datasets:
         data = all_data[dataset]
-        difference_in_ari, max_budget = calc_difference_in_ari(data, "inspect", max_budget)
+        difference_in_ari, max_budget = calc_difference_in_ari(data, other, max_budget)
 
         if len(total_difference) < len(difference_in_ari):
             total_difference = total_difference.tolist()
@@ -793,9 +1024,45 @@ def plot_poster_graphs(style="seaborn-v0_8-poster", show=True):
     mpl.style.use(style)
     plot_selection_avg(False)
     plot_estimating_k(show)
+    graph_clv("clv")
+
+
+def calc_percent():
+    paths = ["heuristic/using_entropy", "heuristic/size", "heuristic/avg_dist", "heuristic/max_dist",
+             "heuristic/med_dist", "heuristic/var_dist"]
+
+    for path in paths:
+        print(path)
+        with open(path + "/everything.json") as f:
+            all_data = json.load(f)
+
+        datasets = list(all_data.keys())
+
+        counter = {"size": 0, "max_dist": 0, "avg_dist": 0, "med_dist": 0, "var_dist": 0, "nothing": 0, "total": 0}
+
+        for dataset in datasets:
+            dataset_counter = all_data[dataset]["inspect"]["counter"]
+            for key in counter.keys():
+                counter[key] += dataset_counter[key]
+
+        print(counter)
+        l = []
+        for key in counter.keys():
+            if key != "total":
+                l.append(counter[key])
+            else:
+                tot = counter[key]
+                result = (np.array(l) / tot) * 100
+
+        s = ""
+        for n in result:
+            s += "  & $ " + str(round(n, 1)) + "\%$"
+        print(result)
+        print(s)
 
 
 def main():
+    mpl.style.use("seaborn-v0_8-poster")
     mmc_hyper_parameters = [
         {"algo": "MMC", "diagonal": False, "init": "identity"},
         {"algo": "MMC", "diagonal": False, "init": "covariance"},
@@ -811,10 +1078,13 @@ def main():
         {"algo": "ITML", "prior": "random"}
     ]
 
+    verbose = False
     tests = [
         ("normal", None),
+        ("metric_learning", [("itml", itml_hyper_parameters), ("mmc", mmc_hyper_parameters)])
         # ("smart", None),
-        ("inspect", [(Split_estimators.GROUND_TRUTH, -1)])
+        # ("hdbscan", None)
+        # ("inspect", [(Split_estimators.NORMAL, Heuristics.SIZE, verbose)])
         # ("mini_merge", [("", 2)])
         # ("incr_budget",
         #  [("mmc", mmc_hyper_parameters),
@@ -822,24 +1092,54 @@ def main():
         #   ])
     ]
 
+    # all_tests = [
+    #     [
+    #         ("normal", None),
+    #         ("inspect", [(Split_estimators.NORMAL, Heuristics.MAX, verbose)])
+    #     ],
+    #     [
+    #         ("normal", None),
+    #         ("inspect", [(Split_estimators.NORMAL, Heuristics.MED, verbose)])
+    #     ],
+    #     [
+    #         ("normal", None),
+    #         ("inspect", [(Split_estimators.NORMAL, Heuristics.VAR, verbose)])
+    #     ],
+    # ]
+    # paths = ["heuristic/max_dist", "heuristic/med_dist", "heuristic/var_dist"]
+
     # test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "spambase", "breast", "dermatology"]
     test_sets = ["iris", "ionosphere", "glass", "yeast", "wine", "ecoli", "breast", "dermatology"]
-    # test_sets = ["iris", "wine"]
+    # test_sets = ["iris", "wine", "ecoli", "dermatology"]
+
+    # test_sets = ["breast"]
+    # test_sets = ["glass", "iris"]
 
     # paths = ["estimating_k/ground_truth", "estimating_k/full_tree_search", "estimating_k/elbow_method",
     #          "estimating_k/silhouette_analysis", "estimating_k/calinski_harabasz_index",
     #          "estimating_k/davies_bouldin_index"]
-    # paths = ["estimating_k/gapstatistics"]
-    paths = ["estimating_k/calculating_%"]
+    # paths = ["this_is_only_for_testing/hdbscan_tsne"]
+    # paths = ["estimating_k/calculating_%"]
+    paths = ["metric_learner_transform_dataset"]
     for p in paths:
         # path = "testing_smart_split_level/only_ground_k"  # No "/" at the end
+        print(p, tests)
         seed = 31
-        test_cobras(test_sets, tests, p, 150, 3, seed)
+        test_cobras(test_sets, tests, p, 150, 5, seed)
         put_tests_in_one_json(p, test_sets)
         # print(p)
-        # # graph_clv(p)
-        graph_normal_vs_experiment("inspect", p, False)
+        # graph_clv(p)
+        # graph_normal_vs_experiment("hdbscan", p, False, title="Using HDBSCAN in the initial split", data_sets=test_sets)
         print()
+
+    # paths = ["heuristic/friedman_testing/aligned_all_together", "heuristic/friedman_testing/normal_all_together"]
+    #
+    # for (p, t) in zip(paths, ["Aligned Friedman ranking", "Friedman ranking"]):
+    #     print(p, t)
+    #     graph_normal_vs_experiment(
+    #         "inspect", p, False, title=t
+    #     )
+    #     print()
 
 
 def test_mpl_styles():
@@ -861,5 +1161,10 @@ def test_mpl_styles():
 
 
 if __name__ == "__main__":
+    # calc_percent()
     main()
     # plot_poster_graphs()
+    # test_mpl_styles()
+    # style = "seaborn-v0_8-poster"
+    # mpl.style.use(style)
+    # plot_selection_avg()

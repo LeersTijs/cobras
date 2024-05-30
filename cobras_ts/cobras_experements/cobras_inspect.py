@@ -2,6 +2,9 @@ import copy
 import time
 from enum import Enum
 
+import pandas
+from strenum import StrEnum
+
 import numpy as np
 from kneed import KneeLocator
 from matplotlib import pyplot as plt
@@ -14,6 +17,7 @@ from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_har
 
 from cobras_ts.cluster import Cluster
 from cobras_ts.clustering import Clustering
+from cobras_ts.cobras_experements.friedman_aligned_rank import friedman_aligned_ranks_test, friedman_test
 from cobras_ts.cobras_experements.nfa import NFA
 from cobras_ts.cobras_kmeans import COBRAS_kmeans
 from cobras_ts.superinstance_kmeans import SuperInstance_kmeans
@@ -31,10 +35,21 @@ class Split_estimators(Enum):
     X_MEANS = 8
 
 
+class Heuristics(StrEnum):
+    SIZE = "size"
+    MAX = "max_dist"
+    AVG = "avg_dist"
+    MED = "med_dist"
+    VAR = "var_dist"
+    ENTROPY = "label_entropy"
+    FRIEDMAN = "friedman"
+    FRIEDMAN_ALINGED_RANKING = "FAR"
+
+
 class COBRAS_inspect(COBRAS_kmeans):
 
     def __init__(self, data, querier, max_questions, ground_truth_labels: list[int], verbose=True, use_nfa=False,
-                 starting_heur="size",
+                 starting_heur=Heuristics.SIZE,
                  split_estimator=Split_estimators.NORMAL):
         super().__init__(data, querier, max_questions)
 
@@ -49,13 +64,15 @@ class COBRAS_inspect(COBRAS_kmeans):
         self.split_estimator = split_estimator
         self.max_tested_k = 10
 
+        self.current_iteration_count = 0
+
         if use_nfa:
-            state_names = ["size", "max_dist", "avg_dist", "med_dist", "var_dist"]
-            size_prob = np.array([0.0894, 0.01, 0.0572, 0.0625, 0.1519])
-            max_prob = np.array([0.2076, 0.0953, 0.1034, 0.1173, 0.1408])
-            avg_prob = np.array([0.4363, 0.2288, 0.1101, 0.1094, 0.145])
-            med_prob = np.array([0.4242, 0.219, 0.1175, 0.1404, 0.1265])
-            var_prob = np.array([0.2747, 0.1012, 0.1046, 0.0833, 0.1122])
+            state_names =        ["size", "max_dist", "avg_dist", "med_dist", "var_dist"]
+            size_prob = np.array([0.077 , 0.08      , 0.045     , 0.049     , 0.123])
+            max_prob = np.array( [0.174 , 0.089     , 0.084     , 0.095     , 0.117])
+            avg_prob = np.array( [0.436 , 0.227     , 0.107     , 0.107     , 0.142])
+            med_prob = np.array( [0.34  , 0.186     , 0.096     , 0.118     , 0.099])
+            var_prob = np.array( [0.229 , 0.1       , 0.084     , 0.067     , 0.102])
 
             size_prob /= np.sum(size_prob)
             max_prob /= np.sum(max_prob)
@@ -63,16 +80,20 @@ class COBRAS_inspect(COBRAS_kmeans):
             med_prob /= np.sum(med_prob)
             var_prob /= np.sum(var_prob)
 
-            print(np.sum(size_prob))
-            print(np.sum(max_prob))
-            print(np.sum(avg_prob))
-            print(np.sum(med_prob))
-            print(np.sum(var_prob))
-
             self.nfa = NFA(np.array([size_prob, max_prob, avg_prob, med_prob, var_prob]).tolist(), state_names,
                            starting_heur)
             self.initial_select = True
-            print(self.nfa.get_transition_matrix())
+
+            if self.verbose:
+                print(size_prob, np.sum(size_prob))
+                print(max_prob, np.sum(max_prob))
+                print(avg_prob, np.sum(avg_prob))
+                print(med_prob, np.sum(med_prob))
+                print(var_prob, np.sum(var_prob))
+
+                print(self.nfa.get_transition_matrix())
+
+
         else:
             self.initial_select = False
             self.nfa = None
@@ -156,6 +177,12 @@ class COBRAS_inspect(COBRAS_kmeans):
         # while we have not reached the max number of questions
         while len(self.ml) + len(self.cl) < self.max_questions and metrics.adjusted_rand_score(
                 self.clustering.construct_cluster_labeling(), self.ground_truth_labels) != 1.0:
+            self.current_iteration_count += 1
+
+            if len(self.ml) + len(self.cl) >= 30:
+                # print("Switching current heur to Max, number of queries asked until now: ", len(self.ml) + len(self.cl))
+                self.current_heur = Heuristics.VAR
+
             # notify the querier that there is a new clustering
             # such that this new clustering can be displayed to the user
             self.querier.update_clustering(self.clustering)
@@ -295,19 +322,19 @@ class COBRAS_inspect(COBRAS_kmeans):
         return training
 
     def determine_split_level(self, superinstance: SuperInstance_kmeans, clustering_to_store):
-        true_k = superinstance.get_information(self.ground_truth_labels, self.cl, self.ml)["k"]
+        # true_k = superinstance.get_information(self.ground_truth_labels, self.cl, self.ml)["k"]
+        #
+        # if len(superinstance.indices) <= 2:
+        #     return true_k
 
-        if len(superinstance.indices) <= 2:
-            return true_k
-
-        self.counter_k[Split_estimators.ELBOW] += true_k == self.determine_split_level_elbow(superinstance, clustering_to_store)
-        self.counter_k[Split_estimators.SILHOUETTE_ANALYSIS] += true_k == self.determine_split_level_with_a_scorer(superinstance, clustering_to_store, silhouette_score)
-        self.counter_k[Split_estimators.CALINSKI_HARABASZ_INDEX] += true_k == self.determine_split_level_with_a_scorer(superinstance, clustering_to_store, calinski_harabasz_score)
-        self.counter_k[Split_estimators.DAVIES_BOULDIN_INDEX] += true_k == self.determine_split_level_with_a_scorer(superinstance, clustering_to_store, davies_bouldin_score)
-        self.counter_k[Split_estimators.NORMAL] += true_k == super().determine_split_level(superinstance, clustering_to_store, False)
-        self.counter_k[Split_estimators.FULL_TREE_SEARCH] += true_k == self.full_tree_search(superinstance, clustering_to_store, use_queries=False)
-        self.counter_k[Split_estimators.X_MEANS] += true_k == self.split_superinstance_using_x_means(superinstance, only_calc_k=True)
-        self.counter_k["total"] += 1
+        # self.counter_k[Split_estimators.ELBOW] += true_k == self.determine_split_level_elbow(superinstance, clustering_to_store)
+        # self.counter_k[Split_estimators.SILHOUETTE_ANALYSIS] += true_k == self.determine_split_level_with_a_scorer(superinstance, clustering_to_store, silhouette_score)
+        # self.counter_k[Split_estimators.CALINSKI_HARABASZ_INDEX] += true_k == self.determine_split_level_with_a_scorer(superinstance, clustering_to_store, calinski_harabasz_score)
+        # self.counter_k[Split_estimators.DAVIES_BOULDIN_INDEX] += true_k == self.determine_split_level_with_a_scorer(superinstance, clustering_to_store, davies_bouldin_score)
+        # self.counter_k[Split_estimators.NORMAL] += true_k == super().determine_split_level(superinstance, clustering_to_store, False)
+        # self.counter_k[Split_estimators.FULL_TREE_SEARCH] += true_k == self.full_tree_search(superinstance, clustering_to_store, use_queries=False)
+        # self.counter_k[Split_estimators.X_MEANS] += true_k == self.split_superinstance_using_x_means(superinstance, only_calc_k=True)
+        # self.counter_k["total"] += 1
 
         match self.split_estimator:
             case Split_estimators.GROUND_TRUTH:
@@ -502,9 +529,13 @@ class COBRAS_inspect(COBRAS_kmeans):
         max_heur = -np.inf
         originating_cluster = None
 
+        all_info = None
+        sis = []
+        originating_clusters = []
+        if self.current_heur == Heuristics.FRIEDMAN or self.current_heur == Heuristics.FRIEDMAN_ALINGED_RANKING:
+            all_info = pandas.DataFrame(columns=["size", "max_dist", "avg_dist", "med_dist", "var_dist"])
+
         # df = pandas.DataFrame(columns=["size", "max_dist", "avg_dist", "med_dist", "var_dist"])
-        # sis = []
-        # originating_clusters = []
         # df.add([2, 3.4, 4.5, 3, 7], axis="rows")
 
         for cluster in self.clustering.clusters:
@@ -526,41 +557,75 @@ class COBRAS_inspect(COBRAS_kmeans):
                     continue
 
                 si_info = superinstance.get_information(self.ground_truth_labels, self.cl, self.ml)
-                # df.loc[len(df.index)] = [si_info["size"], si_info["max_dist"], si_info["avg_dist"], si_info["med_dist"],
-                #                          si_info["var_dist"]]
-                # sis.append(superinstance)
-                # originating_clusters.append(cluster)
 
-                if si_info[self.current_heur] > max_heur:
-                    superinstance_to_split = superinstance
-                    max_heur = si_info[self.current_heur]
-                    originating_cluster = cluster
+                if all_info is not None:
+                    all_info.loc[len(all_info.index)] = [si_info["size"], si_info["max_dist"], si_info["avg_dist"], si_info["med_dist"],
+                                             si_info["var_dist"]]
+                    sis.append(superinstance)
+                    originating_clusters.append(cluster)
+                else:
+                    if si_info[self.current_heur] > max_heur:
+                        superinstance_to_split = superinstance
+                        max_heur = si_info[self.current_heur]
+                        originating_cluster = cluster
 
-        # if len(sis) == 0:
-        #     return None, None
-        #
-        # ranking_df = pandas.DataFrame()
-        # result = [0] * len(sis)
-        # result = np.zeros(len(sis), dtype=np.float64)
-        # for heur in ["size", "max_dist", "avg_dist", "med_dist", "var_dist"]:
-        #     column = -df[heur].values
-        #     column = list(map(lambda x: [x], column))
-        #     _, _, _, ranking_cmp = friedman_aligned_ranks_test(*column)
-        #     result += np.array(ranking_cmp)
-        #     ranking_df[heur] = ranking_cmp
-        # if self.verbose:
-        #     print("The ranking of each heuristic")
-        #     print(ranking_df)
-        #     print("the resulting ranking (just add the column together)")
-        #     print(result)
+        if all_info is not None:
+            if len(sis) == 0:
+                return None, None
 
-        # _, _, _, result = friedman_aligned_ranks_test(*-df.values)
-        # if self.verbose:
-        #     print("The result if I would have placed it together")
-        #     print(result)
-        #
-        # min_pos = np.argmin(result)
-        # return sis[min_pos], originating_clusters[min_pos]
+            ranking_df = pandas.DataFrame()
+            ranking_other_df = pandas.DataFrame()
+            # result = [0] * len(sis)
+            result_sum = np.zeros(len(sis), dtype=np.float64)
+            for heur in ["size", "max_dist", "avg_dist", "med_dist", "var_dist"]:
+                column = -all_info[heur].values
+                column = list(map(lambda x: [x], column))
+
+                if self.current_heur == Heuristics.FRIEDMAN_ALINGED_RANKING:
+                    print("aligned")
+                    _, _, ranking, ranking_cmp = friedman_aligned_ranks_test(*column)
+                else:
+                    print("normal friedman")
+                    _, _, ranking, ranking_cmp = friedman_test(*column)
+
+                result_sum += np.array(ranking_cmp)
+                ranking_df[heur] = ranking_cmp
+                ranking_other_df[heur] = ranking
+            if self.verbose:
+                print("The ranking of each heuristic")
+                print(ranking_df)
+                print("the ranking")
+                print(ranking_other_df)
+                print("the resulting ranking (just add the column together)")
+                print(result_sum)
+
+            if self.current_heur == Heuristics.FRIEDMAN_ALINGED_RANKING:
+                print("aligned friedman")
+                print("Values we are giving to test (in case of all)")
+                print(all_info.values)
+                print(*all_info.values)
+
+                print("allgined result:")
+                _, _, ranking_all_together, result_all_together = friedman_aligned_ranks_test(*-all_info.values)
+                print(ranking_all_together)
+                print(result_all_together)
+                print("friedman result")
+                _, _, me, re = friedman_test(*-all_info.values)
+                print(me)
+                print(re)
+
+            else:
+                print("friedman")
+                _, _, ranking_all_together, result_all_together = friedman_test(*-all_info.values)
+            # _, _, _, result = friedman_aligned_ranks_test(*-all_info.values)
+            if self.verbose:
+                print("The result if I would have placed it together")
+                print(result_all_together)
+                print("ranking all together")
+                print(ranking_all_together)
+
+            min_pos = np.argmin(result_sum)
+            return sis[min_pos], originating_clusters[min_pos]
 
         if superinstance_to_split is None:
             return None, None

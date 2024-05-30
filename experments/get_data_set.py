@@ -1,5 +1,9 @@
 import numpy as np
+from matplotlib import pyplot as plt
+import matplotlib as mpl
+
 from sklearn import preprocessing
+from sklearn.datasets import make_moons
 
 
 def iris(label):
@@ -65,6 +69,46 @@ def saving_norm_wine_data_ax0():
                delimiter=",")
 
 
+def generate_2D_datasets(seed=31):
+    np.random.seed(seed)
+
+    all_X, all_y = [], []
+
+    for idx, (off_i, off_j) in enumerate([(0, 0), (4, 0), (4, 3), (0, 3)]):
+        X, y = make_moons(n_samples=200, noise=0.05)
+        # print(y)
+        X[:, 0] += off_i
+        X[:, 1] += off_j
+
+        # max_y = len(set(all_y))
+        # y = list(map(lambda x: idx, y))
+
+        all_X.extend(X)
+        all_y.extend(y)
+
+    all_X = np.array(all_X)
+    all_y = np.array(all_y)
+
+    # colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
+    # all_y = list(map(lambda x: colors[x], all_y))
+    print(all_X.shape)
+    print(all_y.shape)
+    # print(all_y)
+
+    # plt.plot(*all_X[all_y == 0].T, "bo", label="cluster 1")
+    # plt.plot(*all_X[all_y == 1].T, "go", label="cluster 2")
+    # plt.scatter(all_X[all_y == 0, 0], all_X[all_y == 0, 1], c="b", label="cluster 1")
+    # plt.scatter(all_X[all_y == 1, 0], all_X[all_y == 1, 1], c="g", label="cluster 2")
+    # plt.scatter(all_X[all_y == 2, 0], all_X[all_y == 2, 1], c="r", label="cluster 3")
+    # plt.scatter(all_X[all_y == 3, 0], all_X[all_y == 3, 1], c="yellow", label="cluster 4")
+    #
+    # # plt.scatter(all_X[:, 0], all_X[:, 1], c=all_y, label=["cluster 1", "cluster 2"])
+    # # plt.legend(["cluster 1", "cluster 2"])
+    # plt.legend()
+    # plt.show()
+    return all_X, all_y
+
+
 def get_data_set(name: str):
     name = name.lower()
     path = "D:/School/2023-2024/thesis/dataSets/"
@@ -124,8 +168,15 @@ def get_data_set(name: str):
 
         case "breast":
             path += "breast+cancer+wisconsin+original/breast-cancer-wisconsin.data"
-            data = np.loadtxt(path, delimiter=',', usecols=[1, 2, 3, 4, 5, 7, 8, 9])
-            labels = np.loadtxt(path, delimiter=',', usecols=[10])
+            all_data_str = np.loadtxt(path, delimiter=',', dtype=str)
+            mask = np.any(all_data_str == "?", axis=1)
+            mask = np.invert(mask)
+            all_data = np.array(all_data_str[mask], dtype=np.int32)
+
+            data = all_data[:, 1:10]
+            labels = all_data[:, 10]
+        case "8moons":
+            data, labels = generate_2D_datasets()
 
         case _:
             raise Exception(f"the dataset: {name} is not available")
@@ -198,8 +249,8 @@ def get_norm_data_set(name: str):
 
         case "breast":
             path += "breast+cancer+wisconsin+original/norm.data"
-            data = np.loadtxt(path, delimiter=',', usecols=[0, 1, 2, 3, 4, 5, 7, 8])
-            labels = np.loadtxt(path, delimiter=',', usecols=[8])
+            data = np.loadtxt(path, delimiter=',', usecols=[0, 1, 2, 3, 4, 5, 6, 7, 8])
+            labels = np.loadtxt(path, delimiter=',', usecols=[9])
 
         case _:
             raise Exception(f"the dataset: {name} is not available")
@@ -209,6 +260,7 @@ def get_norm_data_set(name: str):
 
 def normalize_datasets():
     names = ["iris", "wine", "ionosphere", "glass", "yeast", "ecoli", "spambase", "breast", "dermatology"]
+    names = ["breast"]
 
     path_to_datasets = "D:/School/2023-2024/thesis/dataSets/"
     for name in names:
@@ -227,32 +279,94 @@ def normalize_datasets():
         np.savetxt(fname=path_to_datasets + f"{correct_name}/norm.data", X=added_labels, fmt=fmt, delimiter=',')
 
 
+def count_missing_values_breast():
+    path = "D:/School/2023-2024/thesis/dataSets/"
+    path += "breast+cancer+wisconsin+original/breast-cancer-wisconsin.data"
+    data = np.loadtxt(path, delimiter=',', dtype=str, usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9])
+    unique, counts = np.unique(data, return_counts=True)
+    print(dict(zip(unique, counts)))
+    # labels = np.loadtxt(path, delimiter=',', usecols=[10])
+
+
 def main():
-    # names = ["iris", "yeast"]
+    names = ["breast"]
     # names = ["iris", "wine", "ionosphere", "glass", "yeast", "dermatology"]
-    names = ["iris", "wine", "ionosphere", "glass", "yeast", "ecoli", "spambase", "breast", "dermatology"]
+    # names = ["iris", "wine", "ionosphere", "glass", "yeast", "ecoli", "spambase", "breast", "dermatology"]
     # names = ["wine_normal"]
     # names = ["wine", "normal_wine", "normal_wine_ax0"]
     for name in names:
         data, labels = get_norm_data_set(name)
+        print(get_data_summery(name, data, labels))
+
+        data, labels = get_data_set(name)
         # print(get_data_summery(name, data, labels))
         # print(name)
         # print(type(labels))
         # print(type(data))
         print(get_data_summery(name, data, labels))
-        print(data[0])
-        print(labels[0])
-        print()
+        # print(data[0])
+        # print(labels[0])
+        # print()
+
+
+def get_breast():
+    starting_path = "D:/School/2023-2024/thesis/dataSets/"
+
+    # Normal
+    path_to_full_data = starting_path + "breast+cancer+wisconsin+original/breast-cancer-wisconsin.data"
+
+    all_data_str = np.loadtxt(path_to_full_data, delimiter=',', dtype=str)
+    mask = np.any(all_data_str == "?", axis=1)
+    mask = np.invert(mask)
+    all_data = np.array(all_data_str[mask], dtype=np.int32)
+    print(all_data.shape)
+
+    data = all_data[:, 1:10]
+    labels = all_data[:, 10]
+    print(data.shape, labels.shape)
+
+    # normalize the data
+    # data, labels = get_data_set(name)
+    #
+    normalized_data = preprocessing.MinMaxScaler().fit_transform(data)
+    print(f"OG: {data[0]}, norm: {normalized_data[0]}")
+    #
+    print(data.shape[1])
+    fmt = ['%10.10f' for _ in range(data.shape[1])] + ['%d']
+    #
+    added_labels = np.column_stack((normalized_data, labels))
+    print(added_labels.shape)
+    correct_name = "breast+cancer+wisconsin+original"
+    #
+    # correct_name = name if not name == "breast" else "breast+cancer+wisconsin+original"
+    np.savetxt(fname=starting_path + f"{correct_name}/norm.data", X=added_labels, fmt=fmt, delimiter=',')
+
+    # Get normalized data
+    path_to_norm_data = starting_path + "breast+cancer+wisconsin+original/norm.data"
+    data_norm = np.loadtxt(path_to_norm_data, delimiter=',', usecols=[0, 1, 2, 3, 4, 5, 6, 7, 8])
+    labels_norm = np.loadtxt(path_to_norm_data, delimiter=',', usecols=[9])
+    print(data_norm.shape, labels_norm.shape)
 
 
 if __name__ == "__main__":
     # saving_norm_wine_data_ax0()
     # saving_norm_wine_data()
-    main()
+    # main()
+    # count_missing_values_breast()
     # normalize_datasets()
+    # data, labels = get_norm_data_set("breast")
+    # print(data.shape, labels.shape)
+    # print(data.dtype)
+    # print(get_data_summery("breast", data, labels))
+    mpl.style.use("seaborn-v0_8-poster")
+    generate_2D_datasets()
+    # count_missing_values_breast()
+
     # path = "D:/School/2023-2024/thesis/dataSets/Yeast/yeast.data"
     # data = np.genfromtxt(path, delimiter=',', dtype=str)
     # print(data)
     # data, labels = map_yeast_to_matrix(data)
     # print(data[0])
     # print(labels[0])
+
+    # get_breast()

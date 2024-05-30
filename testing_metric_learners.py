@@ -82,7 +82,7 @@ def main():
     print(labels[indices])
 
     print("MMC")
-    # test_mmc(data, indices, cl, ml)
+    test_mmc(data, indices, cl, ml)
 
     print("\nITML")
     # test_itml(data, indices, cl, ml)
@@ -92,14 +92,14 @@ def main():
           "obtain")
 
     print("\nSDML")
-    test_sdml()
-    # print("Unable to run it, problem with skggm")
+    # test_sdml()
+    print("Unable to run it, problem with skggm")
 
     print("\nSCML")
     print("No, it uses triplets. (A, B, C). so A should be closer to B then C")
 
 
 if __name__ == "__main__":
-    # main()
-    import sys
-    print(sys.version)
+    main()
+    # import sys
+    # print(sys.version)

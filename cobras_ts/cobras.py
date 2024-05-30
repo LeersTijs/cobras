@@ -4,13 +4,15 @@ import time
 import copy
 
 import numpy as np
+from matplotlib import pyplot as plt
+
 from cobras_ts.cluster import Cluster
 
 from cobras_ts.clustering import Clustering
 
 
 class COBRAS(abc.ABC):
-    def __init__(self, data, querier, max_questions, train_indices=None, store_intermediate_results=True):
+    def __init__(self, data, querier, max_questions, train_indices=None, store_intermediate_results=True, verbose=False):
         """
         COBRAS clustering
 
@@ -23,10 +25,12 @@ class COBRAS(abc.ABC):
         :param train_indices: the indices of the training data
         :type train_indices: List[int]
         """
+
         self.data = data
         self.querier = querier
         self.max_questions = max_questions
         self.store_intermediate_results = store_intermediate_results
+        self.verbose = verbose
 
         if train_indices is None:
             self.train_indices = range(self.data.shape[0])
@@ -40,6 +44,7 @@ class COBRAS(abc.ABC):
         self.ml = None
         self.cl = None
         self.clv = []
+        self.cv = []
 
     def cluster(self):
         """Perform clustering
@@ -68,6 +73,7 @@ class COBRAS(abc.ABC):
         # the super-instance is split, and a new cluster is created for each of the newly created super-instances
         initial_k = self.determine_split_level(initial_superinstance,
                                                copy.deepcopy(self.clustering.construct_cluster_labeling()))
+
         # split the super-instance and place each new super-instance in its own cluster
         superinstances = self.split_superinstance(initial_superinstance, initial_k)
         self.clustering.clusters = []
@@ -80,17 +86,38 @@ class COBRAS(abc.ABC):
                 for (x, y) in self.cl:
                     if x in si.indices and y in si.indices:
                         clv += 1
-                for (x, y) in self.ml:
-                    if x in si.indices and (y not in si.indices):
-                        clv += 1
-                    if (x not in si.indices) and y in si.indices:
-                        clv += 1
         self.clv.append((len(self.cl) + len(self.ml), clv))
+        self.cv.append((len(self.cl) + len(self.ml), self.count_constraint_violations()))
+
 
         # the first bottom up merging step
         # the resulting cluster is the best clustering we have so use this as first valid clustering
         self.merge_containing_clusters(copy.deepcopy(self.clustering.construct_cluster_labeling()))
         last_valid_clustering = copy.deepcopy(self.clustering)
+
+        if self.verbose:
+            self.colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
+            print(f"#queries: {len(self.cl) + len(self.ml)}")
+            clustering_labels = self.clustering.construct_cluster_labeling()
+            print(clustering_labels)
+            clustering_labels = list(map(lambda i: self.colors[i], clustering_labels))
+            plt.scatter(self.data[:, 0], self.data[:, 1], c=clustering_labels)
+            plt.show()
+
+        queries_asked = len(self.cl) + len(self.ml)
+        budget_already_in_it = False
+        for b, _ in self.clv:
+            if queries_asked == b:
+                budget_already_in_it = True
+        if not budget_already_in_it:
+            clv = 0
+            for cluster in self.clustering.clusters:
+                for si in cluster.super_instances:
+                    for (x, y) in self.cl:
+                        if x in si.indices and y in si.indices:
+                            clv += 1
+            self.clv.append((len(self.cl) + len(self.ml), clv))
+            self.cv.append((len(self.cl) + len(self.ml), self.count_constraint_violations()))
 
         # while we have not reached the max number of questions
         while len(self.ml) + len(self.cl) < self.max_questions:
@@ -107,7 +134,6 @@ class COBRAS(abc.ABC):
             # choose the next super-instance to split
             to_split, originating_cluster = self.identify_superinstance_to_split()
             if to_split is None:
-
                 break
 
             # clustering to store keeps the last valid clustering
@@ -123,6 +149,7 @@ class COBRAS(abc.ABC):
             # - splitting phase -
             # determine the splitlevel
             split_level = self.determine_split_level(to_split, clustering_to_store)
+            # print(split_level)
             # split the chosen super-instance
             new_super_instances = self.split_superinstance(to_split, split_level)
 
@@ -154,6 +181,7 @@ class COBRAS(abc.ABC):
                         if x in si.indices and y in si.indices:
                             clv += 1
             self.clv.append((len(self.cl) + len(self.ml), clv))
+            self.cv.append((len(self.cl) + len(self.ml), self.count_constraint_violations()))
 
             # perform the merging phase
             fully_merged = self.merge_containing_clusters(clustering_to_store)
@@ -162,13 +190,31 @@ class COBRAS(abc.ABC):
             if fully_merged:
                 last_valid_clustering = copy.deepcopy(self.clustering)
 
-            clv = 0
-            for cluster in self.clustering.clusters:
-                for si in cluster.super_instances:
-                    for (x, y) in self.cl:
-                        if x in si.indices and y in si.indices:
-                            clv += 1
-            self.clv.append((len(self.cl) + len(self.ml), clv))
+            queries_asked = len(self.cl) + len(self.ml)
+            budget_already_in_it = False
+            for b, _ in self.clv:
+                if queries_asked == b:
+                    budget_already_in_it = True
+            if not budget_already_in_it:
+                clv = 0
+                for cluster in self.clustering.clusters:
+                    for si in cluster.super_instances:
+                        for (x, y) in self.cl:
+                            if x in si.indices and y in si.indices:
+                                clv += 1
+                self.clv.append((len(self.cl) + len(self.ml), clv))
+                self.cv.append((len(self.cl) + len(self.ml), self.count_constraint_violations()))
+
+            if self.verbose:
+                self.colors = ["b", "g", "r", "c", "m", "y", "peru", "orange", "lime", "yellow"]
+                queries_asked = len(self.cl) + len(self.ml)
+                print(f"#queries: {queries_asked}")
+                # if queries_asked == 129 or queries_asked == 36:
+                clustering_labels = self.clustering.construct_cluster_labeling()
+                print(clustering_labels)
+                clustering_labels = list(map(lambda i: self.colors[i], clustering_labels))
+                plt.scatter(self.data[:, 0], self.data[:, 1], c=clustering_labels)
+                plt.show()
 
         # clustering procedure is finished
         # change the clustering result to the last valid clustering
@@ -177,7 +223,7 @@ class COBRAS(abc.ABC):
         # return the correct result based on what self.store_intermediate_results contains
         if self.store_intermediate_results:
             return self.clustering, [clust for clust, _, _ in self.intermediate_results], [runtime for _, runtime, _ in
-                                                                                           self.intermediate_results], self.ml, self.cl, self.clv
+                                                                                           self.intermediate_results], self.ml, self.cl, self.clv, self.cv
         else:
             return self.clustering
 
@@ -407,3 +453,45 @@ class COBRAS(abc.ABC):
             return None, None
 
         return superinstance_to_split, originating_cluster
+
+    def count_constraint_violations(self):
+        constraint_violations = 0
+
+        for constraints, check_equal in [(self.cl, True), (self.ml, False)]:
+            for (x, y) in constraints:
+                idx, idy = self.find_cluster_id(x), self.find_cluster_id(y)
+                if idx == -1 or idy == -1:
+                    print("WTF das niet goed he")
+                constraint_violations += idx == idy if check_equal else idx != idy
+        # for (x, y) in self.cl:
+        #     idx, idy = -1, -1
+        #     for cluster_id, cluster in enumerate(self.clustering.clusters):
+        #         for si in cluster.super_instances:
+        #             if x in si.indices:
+        #                 idx = cluster_id
+        #             if y in si.indices:
+        #                 idy = cluster_id
+        #     if idx == -1 or idy == -1:
+        #         print("WTF das niet goed he")
+        #     constraint_violations += idx == idy
+        #
+        # for (x, y) in self.ml:
+        #     idx, idy = -1, -1
+        #     for cluster_id, cluster in enumerate(self.clustering.clusters):
+        #         for si in cluster.super_instances:
+        #             if x in si.indices:
+        #                 idx = cluster_id
+        #             if y in si.indices:
+        #                 idy = cluster_id
+        #     if idx == -1 or idy == -1:
+        #         print("WTF das niet goed he")
+        #     constraint_violations += idx != idy
+
+        return constraint_violations
+
+    def find_cluster_id(self, id):
+        for cluster_id, cluster in enumerate(self.clustering.clusters):
+            for si in cluster.super_instances:
+                if id in si.indices:
+                    return cluster_id
+        return -1
